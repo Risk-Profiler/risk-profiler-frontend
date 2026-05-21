@@ -1,11 +1,21 @@
+import ScoreHeader from "./score-header"
+import ScoreHeaderSkeleton from "../skeletons/details/score-header"
+
 import ScoreGauge from "./score-gauge"
+import ScoreGaugeSkeleton from "../skeletons/details/score-gauge"
+
 import VariableContribution from "./variable-contribution"
+import VariableContributionSkeleton from "../skeletons/details/variable-contribution"
 
 type GaugeData = {
-    score: number | undefined,
+    score: number | undefined
+    loading?: boolean
 }
 
-export default function ScorePanel({ score }: GaugeData) {
+export default function ScorePanel({
+    score,
+    loading = false
+}: GaugeData) {
 
     let riskLabel = "RESIKO RENDAH"
     let riskColor = "bg-green-accent"
@@ -26,32 +36,36 @@ export default function ScorePanel({ score }: GaugeData) {
     return (
         <div className="p-4 lg:p-8 space-y-8 border-r">
 
-            <div className="flex flex-col gap-3 items-center">
-                <h1 className="text-muted-foreground text-xl">
-                    <span className="text-black text-6xl font-bold">
-                        {score}
-                    </span>/100
-                </h1>
-
-                <h1 className={`w-fit text-md text-white px-4 py-2 rounded-full ${riskColor}`}>
-                    {riskLabel}
-                </h1>
-
-                <p className="text-muted-foreground text-sm">
-                    Di atas 65% pengajuan BPR bulan ini
-                </p>
-            </div>
+            {/* header */}
+            {loading ? (
+                <ScoreHeaderSkeleton />
+            ) : (
+                <ScoreHeader 
+                    score={score}
+                    riskLabel={riskLabel}
+                    riskColor={riskColor}
+                />
+            )}
 
             <hr />
 
             {/* gauge */}
-            <ScoreGauge
-                score={score}
-            />
+            {loading ? (
+                <ScoreGaugeSkeleton />
+            ) : (
+                <ScoreGauge
+                    score={score}
+                />
+            )}
 
             <hr />
 
-            <VariableContribution />
+            {/* contribution */}
+            {loading ? (
+                <VariableContributionSkeleton />
+            ) : (
+                <VariableContribution />
+            )}
 
         </div>
     )

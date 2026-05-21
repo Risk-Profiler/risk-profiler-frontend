@@ -1,6 +1,17 @@
+import SystemRecommendationSkeleton from "../skeletons/details/system-recommendation"
 import { Check, CircleCheck } from "lucide-react"
 
-export default function SystemRecommendation() {
+type SystemRecommendationProps = {
+    loading?: boolean
+}
+
+export default function SystemRecommendation({
+    loading = false
+}: SystemRecommendationProps) {
+    if (loading) {
+        return <SystemRecommendationSkeleton />
+    }
+
     return (
         <div className="overflow-hidden border-y p-4 lg:p-8 space-y-6">
             {/* title */}
@@ -108,4 +119,5 @@ export default function SystemRecommendation() {
             </p>
         </div>
     )
+    
 }

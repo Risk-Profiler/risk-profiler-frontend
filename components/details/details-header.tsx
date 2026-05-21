@@ -1,8 +1,11 @@
+import DetailsHeaderSkeleton from "../skeletons/details/details-header"
+
 type HeaderData = {
     id: string
     name: string
     recommended_limit: number | undefined
     band: string | undefined
+    loading?: boolean
 }
 
 export default function DetailsHeader({
@@ -10,7 +13,13 @@ export default function DetailsHeader({
     name,
     recommended_limit,
     band,
+    loading = false,
 }: HeaderData) {
+
+    if (loading) {
+        return <DetailsHeaderSkeleton />
+    }
+
     return (
         <header className="overflow-hidden border-b p-4 lg:p-8 space-y-4">
             {/* breadcrumbs */}

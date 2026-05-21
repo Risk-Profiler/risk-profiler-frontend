@@ -1,6 +1,15 @@
+import DataSourcesSkeleton from "../skeletons/details/data-sources"
 import { Check, XIcon } from "lucide-react"
 
-export default function DataSources() {
+type DataSourcesProps = {
+    loading?: boolean
+}
+
+export default function DataSources({ loading = false } : DataSourcesProps) {
+    if (loading) {
+        return <DataSourcesSkeleton />
+    }
+    
     return (
         <div className="space-y-4 overflow-hidden">
             <h1 className="text-lg sm:text-xl font-bold">
