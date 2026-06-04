@@ -23,10 +23,26 @@ export type DecisionUpdatePayload = {
 }
 
 function getApiBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_RISK_API_URL?.replace(/\/$/, "") ??
-    DEFAULT_API_BASE_URL
-  )
+  const configuredUrl = process.env.NEXT_PUBLIC_RISK_API_URL?.trim()
+
+  if (!configuredUrl) {
+    return DEFAULT_API_BASE_URL
+  }
+
+  const normalizedUrl = configuredUrl.replace(/\/$/, "")
+
+  if (/^https?:\/\//i.test(normalizedUrl)) {
+    return normalizedUrl
+  }
+
+  if (
+    normalizedUrl.startsWith("localhost") ||
+    normalizedUrl.startsWith("127.0.0.1")
+  ) {
+    return `http://${normalizedUrl}`
+  }
+
+  return `https://${normalizedUrl}`
 }
 
 function withTimeout(timeoutMs: number) {
