@@ -9,7 +9,9 @@ import { toast } from "sonner"
 
 import DecisionActions from "@/components/debitur/decision-actions"
 import { Skeleton } from "@/components/ui/skeleton"
+import { requestDecisionUpdate } from "@/lib/api"
 import {
+    getDecisionDisplay,
     getRiskColor,
     getStatusStyle,
     type RiskProfile,
@@ -114,7 +116,7 @@ export default function Dashboard() {
         })
     }
 
-    const updateStatus = (profile: RiskProfile, status: string, note: string) => {
+    const updateStatus = async (profile: RiskProfile, status: "Approved" | "Rejected", note: string) => {
         const updatedData = umkmData.map((umkm) =>
             umkm.id === profile.id
                 ? {
@@ -127,8 +129,22 @@ export default function Dashboard() {
 
         persistData(updatedData)
         toast.success(`Status ${profile.name} diperbarui`, {
-            description: status,
+            description: getDecisionDisplay(status).title,
         })
+
+        try {
+            await requestDecisionUpdate({
+                merchant_id: profile.input.merchant_id,
+                status,
+                note,
+            })
+        } catch (error) {
+            console.error("Decision sync failed:", error)
+            toast.warning("Keputusan tersimpan secara lokal", {
+                description:
+                    "Sinkronisasi ke backend belum berhasil. Data tetap tersimpan di browser.",
+            })
+        }
     }
 
     return (
@@ -226,7 +242,10 @@ export default function Dashboard() {
 
             {!loading && (
             <div className="mt-6 grid gap-4 sm:gap-6">
-                {visibleData.map((umkm, index) => (
+                {visibleData.map((umkm, index) => {
+                    const statusDisplay = getDecisionDisplay(umkm.status)
+
+                    return (
                     <motion.article
                         key={umkm.id}
                         initial={{ opacity: 0, y: 10 }}
@@ -242,7 +261,7 @@ export default function Dashboard() {
                                     </h1>
 
                                     <p className={`rounded-full px-4 py-1 text-xs sm:text-sm font-medium ${getStatusStyle(umkm.status)}`}>
-                                        {umkm.status}
+                                        {statusDisplay.title}
                                     </p>
 
                                     <p className={`rounded-full px-4 py-1 text-xs sm:text-sm font-medium text-white ${getRiskColor(umkm.risk)}`}>
@@ -304,34 +323,36 @@ export default function Dashboard() {
                             </div>
                         </div>
 
-                        <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="mt-5 flex flex-col gap-3 border-t pt-4 lg:flex-row lg:items-center lg:justify-end">
                             <button
                                 onClick={() => handleDelete(umkm)}
-                                className="w-full lg:w-fit rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm sm:text-base font-medium text-red-600 transition hover:bg-red-100"
+                                className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 lg:w-fit"
                             >
                                 Delete
                             </button>
 
                             <DecisionActions
+                                status={umkm.status}
                                 onReview={() => handleReview(umkm)}
                                 onDecline={() =>
                                     updateStatus(
                                         umkm,
                                         "Rejected",
-                                        "Ditolak dari dashboard oleh analis."
+                                        "Pengajuan ditolak berdasarkan hasil review analis."
                                     )
                                 }
                                 onApprove={() =>
                                     updateStatus(
                                         umkm,
                                         "Approved",
-                                        "Disetujui dari dashboard oleh analis."
+                                        "Pengajuan diterima berdasarkan hasil review analis."
                                     )
                                 }
                             />
                         </div>
                     </motion.article>
-                ))}
+                    )
+                })}
             </div>
             )}
         </main>

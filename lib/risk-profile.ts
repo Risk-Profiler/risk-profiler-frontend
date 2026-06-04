@@ -16,6 +16,7 @@ export type BackendPredictionResponse = {
   score_percentile?: number
   risk_level?: string
   recommended_limit?: number
+  peer_comparison_used?: boolean
   probability?: number
   class_probabilities?: Record<string, number>
   confidence?: string
@@ -92,6 +93,7 @@ export type RiskProfile = {
   createdAt: string
   decisionNote?: string
   revisionLimit?: number
+  peerComparisonUsed?: boolean
   input: RiskFormInput
   breakdown: BreakdownItem[]
   contributions: ContributionItem[]
@@ -115,6 +117,28 @@ const cleanModelText = (value: string) =>
     .replace(/\bkalkulasi frontend\b/gi, "analisis aplikasi")
     .replace(/\bSkor ML\b/gi, "Skor model")
     .replace(/\bprobabilitas kelas\b/gi, "tingkat keyakinan")
+
+const limitRecommendationText = (limit: number, peerComparisonUsed: boolean) => {
+  const basis = peerComparisonUsed
+    ? "dari profil pembanding serupa"
+    : "berdasarkan skor, kapasitas transaksi, dan faktor risiko merchant"
+
+  return `Plafon rekomendasi ${basis}: Rp ${limit.toLocaleString("id-ID")}.`
+}
+
+const normalizeRecommendationText = (
+  value: string,
+  limit: number,
+  peerComparisonUsed: boolean
+) => {
+  const cleaned = cleanModelText(value)
+
+  if (/^Plafon rekomendasi /i.test(cleaned)) {
+    return limitRecommendationText(limit, peerComparisonUsed)
+  }
+
+  return cleaned
+}
 
 const roundTo = (value: number, step: number) =>
   Math.round(value / step) * step
@@ -262,18 +286,86 @@ export function getBand(score: number) {
   return { band: "E", range: "0-39" }
 }
 
-export function getStatusStyle(status: string) {
-  const normalized = status.toLowerCase()
+export type DecisionState = "pending" | "approved" | "rejected" | "revision"
 
-  if (normalized.includes("approved")) {
+export function getDecisionState(status?: string): DecisionState {
+  const normalized = status?.toLowerCase().trim() ?? ""
+
+  if (normalized.includes("approved") || normalized.includes("diterima")) {
+    return "approved"
+  }
+
+  if (normalized.includes("rejected") || normalized.includes("ditolak")) {
+    return "rejected"
+  }
+
+  if (
+    normalized.includes("revision") ||
+    normalized.includes("revisi") ||
+    normalized.includes("plafon")
+  ) {
+    return "revision"
+  }
+
+  return "pending"
+}
+
+export function isDecisionFinal(status?: string) {
+  return getDecisionState(status) !== "pending"
+}
+
+export function getDecisionDisplay(status?: string) {
+  const state = getDecisionState(status)
+  const displays = {
+    pending: {
+      title: "Menunggu keputusan analis",
+      description: "Pengajuan masih berada dalam tahap review.",
+      className: "bg-blue-card text-blue-card-txt",
+      borderClassName: "border-blue-card",
+    },
+    approved: {
+      title: "Pengajuan diterima",
+      description: "Rekomendasi approval telah dicatat untuk proses lanjutan.",
+      className: "bg-light-green-accent text-green-accent",
+      borderClassName: "border-green-accent/30",
+    },
+    rejected: {
+      title: "Pengajuan ditolak",
+      description: "Rekomendasi penolakan telah dicatat oleh analis.",
+      className: "bg-light-red-accent text-red-accent",
+      borderClassName: "border-red-200",
+    },
+    revision: {
+      title: "Revisi plafon sedang diajukan",
+      description: "Pengajuan menunggu tindak lanjut atas plafon yang direvisi.",
+      className: "bg-light-yellowish-accent text-yellowish-accent",
+      borderClassName: "border-yellow-200",
+    },
+  } satisfies Record<
+    DecisionState,
+    {
+      title: string
+      description: string
+      className: string
+      borderClassName: string
+    }
+  >
+
+  return displays[state]
+}
+
+export function getStatusStyle(status: string) {
+  const state = getDecisionState(status)
+
+  if (state === "approved") {
     return "bg-light-green-accent text-green-accent"
   }
 
-  if (normalized.includes("rejected")) {
+  if (state === "rejected") {
     return "bg-light-red-accent text-red-accent"
   }
 
-  if (normalized.includes("revision")) {
+  if (state === "revision") {
     return "bg-light-yellowish-accent text-yellowish-accent"
   }
 
@@ -591,7 +683,14 @@ function buildAiExplanation(
   return `Sistem mengklasifikasikan merchant ${input.merchant_id} sebagai ${riskLevel}, terutama dipengaruhi oleh ${supporting[0]?.label ?? "Volume QRIS Bulanan"} dan ${supporting[1]?.label ?? "Hari Aktif QRIS"}. Faktor ${balancing?.label ?? "Usia Usaha"} menjadi penyeimbang kekuatan prediksi. Skor analisis saat ini ${score}/100.`
 }
 
-function buildRecommendations(riskLevel: string, limit: number, score: number, band: string, drivers: ShapDriver[]) {
+function buildRecommendations(
+  riskLevel: string,
+  limit: number,
+  score: number,
+  band: string,
+  drivers: ShapDriver[],
+  peerComparisonUsed: boolean
+) {
   const topDriver = drivers[0]
   const balancingDriver = drivers.find((driver) => driver.role === "balancing")
 
@@ -600,7 +699,7 @@ function buildRecommendations(riskLevel: string, limit: number, score: number, b
       "Layak untuk pembiayaan dengan proses approval normal.",
       `Profil risiko rendah - Band ${band} dengan skor ${score}/100.`,
       `Faktor utama: ${topDriver?.label ?? "stabilitas transaksi"} bernilai ${topDriver?.value ?? "baik"}.`,
-      `Plafon optimal yang disarankan: Rp ${limit.toLocaleString("id-ID")}.`,
+      limitRecommendationText(limit, peerComparisonUsed),
     ]
   }
 
@@ -609,7 +708,7 @@ function buildRecommendations(riskLevel: string, limit: number, score: number, b
       "Dapat dipertimbangkan dengan review analis dan limit konservatif.",
       `Profil risiko sedang - Band ${band} dengan skor ${score}/100.`,
       `Perhatikan faktor ${topDriver?.label ?? "utilitas/transaksi"} sebelum approval final.`,
-      `Plafon disarankan tidak melebihi Rp ${limit.toLocaleString("id-ID")}.`,
+      limitRecommendationText(limit, peerComparisonUsed),
     ]
   }
 
@@ -617,7 +716,8 @@ function buildRecommendations(riskLevel: string, limit: number, score: number, b
     "Tidak direkomendasikan untuk approval langsung.",
     `Profil risiko tinggi - Band ${band} dengan skor ${score}/100.`,
     `Faktor paling dominan: ${topDriver?.label ?? "keterlambatan utilitas"}; faktor penahan: ${balancingDriver?.label ?? "stabilitas usaha"}.`,
-    "Minta dokumen tambahan atau ajukan revisi plafon yang lebih rendah.",
+    limitRecommendationText(limit, peerComparisonUsed),
+    "Minta dokumen tambahan sebelum approval final.",
   ]
 }
 
@@ -643,6 +743,7 @@ export function createRiskProfile(
     typeof response.recommended_limit === "number"
       ? response.recommended_limit
       : calculateRecommendedLimit(input, score)
+  const peerComparisonUsed = response.peer_comparison_used === true
 
   return {
     id: existingId ?? `LA-2026-${Math.floor(Math.random() * 9000) + 1000}`,
@@ -661,6 +762,7 @@ export function createRiskProfile(
     bandRange: response.band_range ?? bandData.range,
     status: "Pending Review",
     createdAt: new Date().toISOString(),
+    peerComparisonUsed,
     input,
     breakdown:
       normalizeBackendBreakdown(response.breakdown) ??
@@ -672,8 +774,17 @@ export function createRiskProfile(
       normalizeBackendDataSources(response.data_sources) ??
       buildDataSources(input),
     recommendations:
-      response.recommendations?.map(cleanModelText) ??
-      buildRecommendations(risk, limit, score, response.band ?? bandData.band, shapDrivers),
+      response.recommendations?.map((item) =>
+        normalizeRecommendationText(item, limit, peerComparisonUsed)
+      ) ??
+      buildRecommendations(
+        risk,
+        limit,
+        score,
+        response.band ?? bandData.band,
+        shapDrivers,
+        peerComparisonUsed
+      ),
     aiExplanation: cleanModelText(aiExplanation),
     shapDrivers,
   }
@@ -727,7 +838,14 @@ export function hydrateRiskProfile(profile: Partial<RiskProfile>): RiskProfile {
     breakdown: profile.breakdown ?? generated.breakdown,
     contributions: profile.contributions ?? generated.contributions,
     dataSources: profile.dataSources ?? generated.dataSources,
-    recommendations: (profile.recommendations ?? generated.recommendations).map(cleanModelText),
+    peerComparisonUsed: profile.peerComparisonUsed ?? generated.peerComparisonUsed,
+    recommendations: (profile.recommendations ?? generated.recommendations).map((item) =>
+      normalizeRecommendationText(
+        item,
+        profile.limit ?? profile.recommended_limit ?? generated.limit,
+        profile.peerComparisonUsed ?? generated.peerComparisonUsed ?? false
+      )
+    ),
     aiExplanation: cleanModelText(profile.aiExplanation ?? generated.aiExplanation),
     shapDrivers: (profile.shapDrivers ?? generated.shapDrivers).map((driver) => ({
       ...driver,

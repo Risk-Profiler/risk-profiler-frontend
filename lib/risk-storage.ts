@@ -1,4 +1,8 @@
-import { hydrateRiskProfile, type RiskProfile } from "./risk-profile"
+import {
+  getDecisionState,
+  hydrateRiskProfile,
+  type RiskProfile,
+} from "./risk-profile"
 
 const DEBITUR_LIST_KEY = "debitur_list"
 const SELECTED_DEBITUR_KEY = "selected_debitur"
@@ -41,11 +45,11 @@ export const statusFilters: Record<
 }
 
 export function getProfileFilter(profile: RiskProfile): RiskStatusFilter {
-  const normalized = profile.status.toLowerCase()
+  const state = getDecisionState(profile.status)
 
-  if (normalized.includes("approved")) return "approved"
-  if (normalized.includes("rejected")) return "rejected"
-  if (normalized.includes("revision")) return "revision"
+  if (state === "approved") return "approved"
+  if (state === "rejected") return "rejected"
+  if (state === "revision") return "revision"
   return "pending"
 }
 

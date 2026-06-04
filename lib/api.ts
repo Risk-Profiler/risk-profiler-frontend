@@ -15,6 +15,13 @@ export class ApiError extends Error {
   }
 }
 
+export type DecisionUpdatePayload = {
+  merchant_id: string
+  status: "Approved" | "Rejected" | "Revision Requested"
+  note?: string
+  revision_limit?: number
+}
+
 function getApiBaseUrl() {
   return (
     process.env.NEXT_PUBLIC_RISK_API_URL?.replace(/\/$/, "") ??
@@ -81,6 +88,29 @@ export async function requestRiskPrediction(
     assertPredictionResponse(rawResult)
 
     return normalizeBackendPrediction(rawResult)
+  } finally {
+    timeout.clear()
+  }
+}
+
+export async function requestDecisionUpdate(payload: DecisionUpdatePayload) {
+  const timeout = withTimeout(REQUEST_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/decisions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: timeout.signal,
+    })
+
+    if (!response.ok) {
+      throw new ApiError("Decision update failed", response.status)
+    }
+
+    return response.json()
   } finally {
     timeout.clear()
   }

@@ -11,6 +11,7 @@ import SystemRecommendation from "@/components/details/system-recommendation"
 import ReportActions from "@/components/details/report-actions"
 import DecisionActions from "@/components/details/decision-actions"
 import RevisionLimitDialog from "@/components/details/revision-limit-dialog"
+import { requestDecisionUpdate } from "@/lib/api"
 import { downloadRiskReportPdf } from "@/lib/report"
 import type { RiskProfile } from "@/lib/risk-profile"
 import {
@@ -44,17 +45,45 @@ export default function Details() {
         upsertProfile(updatedDebitur)
     }
 
-    const handleDecision = (status: string, note: string) => {
+    const syncDecision = async (
+        profile: RiskProfile,
+        status: "Approved" | "Rejected" | "Revision Requested",
+        note: string,
+        revisionLimit?: number
+    ) => {
+        try {
+            await requestDecisionUpdate({
+                merchant_id: profile.input.merchant_id,
+                status,
+                note,
+                revision_limit: revisionLimit,
+            })
+        } catch (error) {
+            console.error("Decision sync failed:", error)
+            toast.warning("Keputusan tersimpan secara lokal", {
+                description:
+                    "Sinkronisasi ke backend belum berhasil. Data tetap tersimpan di browser.",
+            })
+        }
+    }
+
+    const handleDecision = async (
+        status: "Approved" | "Rejected",
+        note: string
+    ) => {
         if (!selectedDebitur) return
 
-        persistSelected({
+        const updatedDebitur = {
             ...selectedDebitur,
             status,
             decisionNote: note,
-        })
+        }
+
+        persistSelected(updatedDebitur)
+        await syncDecision(updatedDebitur, status, note)
 
         toast.success("Keputusan tersimpan", {
-            description: `${selectedDebitur.name} sekarang berstatus ${status}.`,
+            description: note,
         })
     }
 
@@ -67,14 +96,23 @@ export default function Details() {
     const handleRevisionSubmit = (revisionLimit: number) => {
         if (!selectedDebitur) return
 
-        persistSelected({
+        const note = `Revisi plafon sedang diajukan ke Rp ${revisionLimit.toLocaleString("id-ID")}.`
+        const updatedDebitur = {
             ...selectedDebitur,
             status: "Revision Requested",
             limit: revisionLimit,
             recommended_limit: revisionLimit,
             revisionLimit,
-            decisionNote: `Analis mengajukan revisi plafon ke Rp ${revisionLimit.toLocaleString("id-ID")}.`,
-        })
+            decisionNote: note,
+        }
+
+        persistSelected(updatedDebitur)
+        void syncDecision(
+            updatedDebitur,
+            "Revision Requested",
+            note,
+            revisionLimit
+        )
 
         toast.success("Revisi plafon diajukan", {
             description: `Plafon baru: Rp ${revisionLimit.toLocaleString("id-ID")}.`,
@@ -216,17 +254,18 @@ export default function Details() {
             />
 
             <DecisionActions
+                status={selectedDebitur?.status}
                 onReject={() =>
                     handleDecision(
                         "Rejected",
-                        "Analis merekomendasikan penolakan pengajuan."
+                        "Pengajuan ditolak berdasarkan hasil analisis risiko dan kebijakan pembiayaan."
                     )
                 }
                 onRevise={handleRevise}
                 onApprove={() =>
                     handleDecision(
                         "Approved",
-                        "Analis merekomendasikan approval pengajuan."
+                        "Pengajuan diterima berdasarkan hasil analisis risiko dan rekomendasi plafon."
                     )
                 }
             />
