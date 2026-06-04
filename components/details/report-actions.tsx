@@ -7,34 +7,70 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel"
 
-export default function ReportActions(){
+type ReportActionsProps = {
+    onDownload: () => void
+    onCompare: () => void
+}
+
+export default function ReportActions({
+    onDownload,
+    onCompare,
+}: ReportActionsProps) {
+    const actions = [
+        {
+            label: "Unduh Laporan PDF",
+            icon: DownloadIcon,
+            onClick: onDownload,
+        },
+        {
+            label: "Bandingkan Debitur Serupa",
+            icon: GitCompareArrows,
+            onClick: onCompare,
+        },
+    ]
+
     return (
         <div>
             <div className="hidden md:grid grid-cols-2 text-sm font-semibold">
-                <div className="flex justify-center items-center py-6 gap-2 border-r text-muted-foreground hover:bg-muted transition cursor-pointer">
-                    <DownloadIcon size={20}/>
-                    <h1 className="underline">Unduh Laporan PDF</h1>
-                </div>
-                <div className="flex justify-center items-center py-6 gap-2 text-muted-foreground hover:bg-muted transition cursor-pointer">
-                    <GitCompareArrows size={20}/>
-                    <h1 className="underline">Bandingkan Debitur Serupa</h1>
-                </div>
+                {actions.map((action, index) => {
+                    const Icon = action.icon
+
+                    return (
+                        <button
+                            key={action.label}
+                            onClick={action.onClick}
+                            className={`flex justify-center items-center py-6 gap-2 text-muted-foreground hover:bg-muted transition cursor-pointer ${
+                                index === 0 ? "border-r" : ""
+                            }`}
+                        >
+                            <Icon size={20} />
+                            <span className="underline">{action.label}</span>
+                        </button>
+                    )
+                })}
             </div>
 
             <Carousel className="relative block md:hidden text-sm font-semibold border-t">
                 <CarouselContent>
-                    <CarouselItem className="flex justify-center items-center py-6 gap-2 border-r text-muted-foreground hover:bg-muted transition cursor-pointer">
-                        <DownloadIcon size={20}/>
-                        <h1 className="underline">Unduh Laporan PDF</h1>
-                    </CarouselItem>
-                    <CarouselItem className="flex justify-center items-center py-6 gap-2 text-muted-foreground hover:bg-muted transition cursor-pointer">
-                        <GitCompareArrows size={20}/>
-                        <h1 className="underline">Bandingkan Debitur Serupa</h1>
-                    </CarouselItem>
+                    {actions.map((action) => {
+                        const Icon = action.icon
+
+                        return (
+                            <CarouselItem key={action.label}>
+                                <button
+                                    onClick={action.onClick}
+                                    className="flex w-full justify-center items-center py-6 gap-2 text-muted-foreground hover:bg-muted transition cursor-pointer"
+                                >
+                                    <Icon size={20} />
+                                    <span className="underline">{action.label}</span>
+                                </button>
+                            </CarouselItem>
+                        )
+                    })}
                 </CarouselContent>
-                <CarouselPrevious className="absolute left-4 bg-black text-white"/>
+                <CarouselPrevious className="absolute left-4 bg-black text-white" />
                 <CarouselNext className="absolute right-4 bg-black text-white" />
-            </Carousel> 
+            </Carousel>
         </div>
     )
 }

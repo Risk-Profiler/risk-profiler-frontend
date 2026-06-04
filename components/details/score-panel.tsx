@@ -6,32 +6,23 @@ import ScoreGaugeSkeleton from "../skeletons/details/score-gauge"
 
 import VariableContribution from "./variable-contribution"
 import VariableContributionSkeleton from "../skeletons/details/variable-contribution"
+import { getRiskColor, getRiskLabel, type ContributionItem } from "@/lib/risk-profile"
 
 type GaugeData = {
     score: number | undefined
+    risk: string | undefined
+    contributions: ContributionItem[]
     loading?: boolean
 }
 
 export default function ScorePanel({
     score,
+    risk,
+    contributions,
     loading = false
 }: GaugeData) {
-
-    let riskLabel = "RESIKO RENDAH"
-    let riskColor = "bg-green-accent"
-
-    if ((score ?? 0) >= 70) {
-        riskLabel = "RESIKO RENDAH"
-        riskColor = "bg-green-accent"
-    } 
-    else if ((score ?? 0) >= 50) {
-        riskLabel = "RESIKO SEDANG"
-        riskColor = "bg-yellowish-accent"
-    } 
-    else {
-        riskLabel = "RESIKO TINGGI"
-        riskColor = "bg-red-accent"
-    }
+    const riskLabel = getRiskLabel(risk ?? "High Risk").toUpperCase()
+    const riskColor = getRiskColor(risk ?? "High Risk")
 
     return (
         <div className="p-4 lg:p-8 space-y-8 border-r">
@@ -64,7 +55,7 @@ export default function ScorePanel({
             {loading ? (
                 <VariableContributionSkeleton />
             ) : (
-                <VariableContribution />
+                <VariableContribution contributions={contributions} />
             )}
 
         </div>

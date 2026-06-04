@@ -1,11 +1,16 @@
 import DataSources from "./data-sources"
 import BreakdownList from "./breakdown-list"
+import type { BreakdownItem, DataSourceItem } from "@/lib/risk-profile"
 
 type CBProps = {
+    dataSources: DataSourceItem[]
+    breakdown: BreakdownItem[]
     loading?: boolean
 }
 
 export default function ContributionBreakdown({
+    dataSources,
+    breakdown,
     loading = false
 }: CBProps) {
 
@@ -14,11 +19,13 @@ export default function ContributionBreakdown({
 
             {/* sumber data */}
             <DataSources
+                dataSources={dataSources}
                 loading={loading}
             />
 
             {/* breakdown list */}
             <BreakdownList
+                breakdown={breakdown}
                 loading={loading}
             />
 

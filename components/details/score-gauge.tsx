@@ -1,15 +1,19 @@
+"use client"
+
 import { gaugeCategories } from "@/lib/gauges"
+import { motion } from "framer-motion"
 
 type GaugeData = {
     score: number | undefined
 }
 
 export default function ScoreGauge({ score }: GaugeData) {
-    const safeScore = score ?? 0
+    const safeScore = Math.min(100, Math.max(0, score ?? 0))
+    const indicatorLeft = `clamp(0.75rem, ${safeScore}%, calc(100% - 0.75rem))`
 
     return (
-        <div className="overflow-hidden">
-            <div className="relative">
+        <div className="overflow-hidden space-y-8">
+            <div className="relative pb-12">
                 <div className="flex h-6 overflow-hidden rounded-full sm:h-8">
                     <div className="w-1/4 bg-very-low-score" />
                     <div className="w-1/4 bg-medium-score" />
@@ -17,21 +21,23 @@ export default function ScoreGauge({ score }: GaugeData) {
                     <div className="w-1/4 bg-very-good-score" />
                 </div>
 
-                {/* marker */}
-                <div
+                <motion.div
                     className="absolute top-6 -translate-x-1/2 sm:top-8"
-                    style={{ left: `${safeScore}%` }}
+                    style={{ left: indicatorLeft }}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
                 >
-                    <div className="mx-auto h-5 w-[2px] bg-black sm:h-6" />
-                    <div className="mx-auto h-2 w-2 rounded-full bg-black" />
+                    <div className="mx-auto h-5 w-[2px] bg-foreground sm:h-6" />
+                    <div className="mx-auto h-2 w-2 rounded-full bg-foreground" />
 
-                    <p className="mt-1 text-center text-xs sm:text-sm">
+                    <p className="mt-1 min-w-8 text-center text-xs font-medium sm:text-sm">
                         {score ?? "-"}
                     </p>
-                </div>
+                </motion.div>
             </div>
 
-            <div className="mt-16 grid grid-cols-1 gap-3 sm:mt-18 sm:grid-cols-2 sm:gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 {gaugeCategories.map((category) => (
                     <div
                         key={category.id}
@@ -51,10 +57,6 @@ export default function ScoreGauge({ score }: GaugeData) {
                     </div>
                 ))}
             </div>
-
-            <p className="mt-6 text-xs sm:text-sm text-muted-foreground">
-                MicroScore v2.3 · 12.400 kasus · Akurasi 91.2%
-            </p>
         </div>
     )
 }

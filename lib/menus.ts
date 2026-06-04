@@ -2,26 +2,22 @@ export const sidebarOptions = [
   {
     id: 1,
     name: "Dashboard",
-    link: "/dashboard"
+    description: "Review pengajuan",
+    icon: "layout-dashboard",
+    link: "/dashboard",
   },
   {
     id: 2,
-    name: "Debitur",
-    link: "/"
+    name: "Input Data",
+    description: "Tambah UMKM",
+    icon: "file-plus",
+    link: "/data_input",
   },
   {
     id: 3,
-    name: "Laporan",
-    link: "/"
-  },
-  {
-    id: 4,
-    name: "Pengaturan",
-    link: "/"
-  },
-  {
-    id: 5,
-    name: "Input Data",
-    link: "/data_input"
+    name: "Beranda",
+    description: "Ringkasan produk",
+    icon: "home",
+    link: "/",
   },
 ]

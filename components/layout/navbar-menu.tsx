@@ -1,5 +1,5 @@
-import { sidebarOptions } from "@/lib/menus";
 import { ArrowRight } from "lucide-react"
+import NavLinks from "./nav-links";
 
 type NavbarMenuProps = {
     openNavbarMenu: boolean;
@@ -16,7 +16,7 @@ export default function NavbarMenu({ openNavbarMenu, setOpenNavbarMenu } : Navba
         >
             <div 
                 onClick={(e) => e.stopPropagation()}
-                className={`fixed top-0 right-0 z-50 h-screen w-72 bg-white p-4 space-y-4
+                className={`fixed top-0 right-0 z-50 h-screen w-80 max-w-[86vw] bg-background p-4 space-y-4 shadow-2xl
                 transition-transform duration-300 ${
                     openNavbarMenu ? "translate-x-0" : "translate-x-full"
                 }`} 
@@ -24,7 +24,6 @@ export default function NavbarMenu({ openNavbarMenu, setOpenNavbarMenu } : Navba
                 <div className="flex justify-between items-center">
                     <div>
                         <h1 className="text-xl font-bold">Risk Profiler</h1>
-                        <p className="text-sm text-muted-foreground">Credit Scoring</p>
                     </div>
 
                     <div>
@@ -34,16 +33,7 @@ export default function NavbarMenu({ openNavbarMenu, setOpenNavbarMenu } : Navba
                 
                 <hr />
 
-                <div className="text-sm text-muted-foreground flex flex-col gap-2">
-                    {sidebarOptions.map((options) => (
-                        <a 
-                            key={options.id} 
-                            href={options.link} className="px-4 py-2 rounded-lg hover:bg-green-accent hover:text-white transition"
-                        >
-                           {options.name}
-                        </a>
-                    ))}
-                </div>
+                <NavLinks onNavigate={() => setOpenNavbarMenu(false)} />
                 
             </div>
         </div>

@@ -1,90 +1,239 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { FilePlus2, Search, WalletCards } from "lucide-react"
+import { motion } from "framer-motion"
+import { toast } from "sonner"
 
 import DecisionActions from "@/components/debitur/decision-actions"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+    getRiskColor,
+    getStatusStyle,
+    type RiskProfile,
+} from "@/lib/risk-profile"
+import {
+    filterProfiles,
+    getProfileFilter,
+    readProfiles,
+    removeProfile,
+    saveProfiles,
+    saveSelectedProfile,
+    statusFilters,
+    type RiskStatusFilter,
+} from "@/lib/risk-storage"
 
-type DebiturData = {
-    id: string
-    name: string
-    owner: string
-    category: string
-    score: number
-    risk: string
-    limit: number
-    status: string
-}
+const statusOrder: RiskStatusFilter[] = [
+    "all",
+    "pending",
+    "approved",
+    "rejected",
+    "revision",
+]
 
-export default function Debitur() {
+export default function Dashboard() {
     const router = useRouter()
-
-    const [umkmData, setUmkmData] = useState<DebiturData[]>([])
+    const [umkmData, setUmkmData] = useState<RiskProfile[]>([])
+    const [filter, setFilter] = useState<RiskStatusFilter>("all")
+    const [query, setQuery] = useState("")
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        const stored = localStorage.getItem("debitur_list")
+        const profiles = readProfiles()
 
-        if (stored) {
-            try {
-                const parsedData = JSON.parse(stored)
+        window.setTimeout(() => {
+            setUmkmData(profiles)
+            setLoading(false)
+        }, 0)
 
-                if (Array.isArray(parsedData)) {
-                    setUmkmData(parsedData)
-                }
-            } catch (error) {
-                console.error("Failed to parse debitur_list:", error)
-                setUmkmData([])
-            }
+        if (profiles.length > 0) {
+            saveProfiles(profiles)
         }
     }, [])
 
-    const handleReview = (umkm: DebiturData) => {
-        localStorage.setItem("selected_debitur", JSON.stringify(umkm))
+    const counts = useMemo(() => {
+        return umkmData.reduce(
+            (acc, profile) => {
+                acc.all += 1
+                acc[getProfileFilter(profile)] += 1
+                return acc
+            },
+            {
+                all: 0,
+                pending: 0,
+                approved: 0,
+                rejected: 0,
+                revision: 0,
+            } satisfies Record<RiskStatusFilter, number>
+        )
+    }, [umkmData])
+
+    const visibleData = useMemo(() => {
+        const filtered = filterProfiles(umkmData, filter)
+        const normalizedQuery = query.toLowerCase().trim()
+
+        if (!normalizedQuery) return filtered
+
+        return filtered.filter((profile) =>
+            [
+                profile.name,
+                profile.id,
+                profile.category,
+                profile.riskLabel,
+                profile.status,
+            ]
+                .join(" ")
+                .toLowerCase()
+                .includes(normalizedQuery)
+        )
+    }, [filter, query, umkmData])
+
+    const persistData = (data: RiskProfile[]) => {
+        setUmkmData(data)
+        saveProfiles(data)
+    }
+
+    const handleFilterChange = (status: RiskStatusFilter) => {
+        setFilter(status)
+    }
+
+    const handleReview = (umkm: RiskProfile) => {
+        saveSelectedProfile(umkm)
+        toast.info("Membuka detail analisis", {
+            description: `${umkm.name} siap direview.`,
+        })
         router.push("/details")
     }
 
-    const handleDelete = (id: string) => {
-        const updatedData = umkmData.filter((umkm) => umkm.id !== id)
+    const handleDelete = (umkm: RiskProfile) => {
+        persistData(removeProfile(umkm.id))
+        toast.success("Pengajuan dihapus", {
+            description: `${umkm.name} sudah dikeluarkan dari daftar.`,
+        })
+    }
 
-        setUmkmData(updatedData)
-        localStorage.setItem("debitur_list", JSON.stringify(updatedData))
+    const updateStatus = (profile: RiskProfile, status: string, note: string) => {
+        const updatedData = umkmData.map((umkm) =>
+            umkm.id === profile.id
+                ? {
+                      ...umkm,
+                      status,
+                      decisionNote: note,
+                  }
+                : umkm
+        )
+
+        persistData(updatedData)
+        toast.success(`Status ${profile.name} diperbarui`, {
+            description: status,
+        })
     }
 
     return (
-        <div className="overflow-hidden space-y-6 p-4 sm:p-6 lg:p-8">
-            {/* title */}
-            <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">
-                    Admin Dashboard
-                </p>
+        <main className="overflow-hidden p-4 sm:p-6 lg:p-8">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-3xl space-y-2">
+                    <h1 className="break-words text-2xl sm:text-3xl lg:text-4xl font-bold">
+                        Review Pengajuan Pembiayaan
+                    </h1>
+                </div>
 
-                <h1 className="break-words text-2xl sm:text-3xl lg:text-4xl font-bold">
-                    Review Pengajuan UMKM
-                </h1>
+                <Link
+                    href="/data_input"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-accent px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95 sm:w-fit"
+                >
+                    <FilePlus2 size={18} />
+                    Input UMKM
+                </Link>
             </div>
 
-            {/* empty state */}
-            {umkmData.length === 0 && (
-                <div className="rounded-3xl border border-dashed p-8 sm:p-12 lg:p-16 text-center">
+            <section className="mt-6 space-y-3 rounded-2xl border p-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {statusOrder.map((status) => (
+                    <button
+                        key={status}
+                        type="button"
+                        onClick={() => handleFilterChange(status)}
+                        className={`rounded-xl border p-4 text-left transition hover:bg-muted ${
+                            filter === status ? "border-green-accent" : ""
+                        }`}
+                    >
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-sm text-muted-foreground">
+                                    {statusFilters[status].label}
+                                </p>
+                                <h2 className="mt-2 text-3xl font-bold">
+                                    {counts[status]}
+                                </h2>
+                            </div>
+                        </div>
+                    </button>
+                ))}
+                </div>
+            </section>
+
+            <section className="mt-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 className="text-lg font-bold">
+                        {statusFilters[filter].label}
+                    </h2>
+                </div>
+
+                <div className="relative w-full sm:max-w-sm">
+                    <Search
+                        size={16}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Cari nama, ID, kategori..."
+                        className="w-full rounded-xl border bg-background py-3 pl-10 pr-4 text-sm outline-none transition focus:border-green-accent"
+                    />
+                </div>
+            </section>
+
+            {loading && <DashboardSkeleton />}
+
+            {!loading && visibleData.length === 0 && (
+                <div className="mt-6 rounded-2xl border border-dashed p-8 sm:p-12 lg:p-16 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-light-green-accent text-green-accent">
+                        <WalletCards size={24} />
+                    </div>
                     <h1 className="text-xl sm:text-2xl font-bold">
-                        Belum ada pengajuan
+                        {query ? "Tidak ada hasil yang cocok" : "Belum ada pengajuan"}
                     </h1>
 
                     <p className="mt-2 text-sm sm:text-base text-muted-foreground">
-                        Data debitur akan muncul setelah form prediction
-                        disubmit.
+                        {query
+                            ? "Coba kata kunci lain atau hapus filter pencarian."
+                            : "Mulai dari input data UMKM."}
                     </p>
+
+                    {!query && (
+                        <Link
+                            href="/data_input"
+                            className="mt-5 inline-flex rounded-lg bg-green-accent px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95"
+                        >
+                            Input UMKM
+                        </Link>
+                    )}
                 </div>
             )}
 
-            {/* cards */}
-            <div className="grid gap-4 sm:gap-6">
-                {umkmData.map((umkm) => (
-                    <div
+            {!loading && (
+            <div className="mt-6 grid gap-4 sm:gap-6">
+                {visibleData.map((umkm, index) => (
+                    <motion.article
                         key={umkm.id}
-                        className="overflow-hidden rounded-3xl border bg-background p-4 sm:p-6 transition hover:shadow-md"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, delay: index * 0.03 }}
+                        className="overflow-hidden rounded-2xl border bg-background p-4 sm:p-6 transition hover:shadow-md"
                     >
-                        {/* top */}
                         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0 space-y-2">
                                 <div className="flex flex-wrap items-center gap-3">
@@ -92,13 +241,17 @@ export default function Debitur() {
                                         {umkm.name}
                                     </h1>
 
-                                    <p className="rounded-full bg-blue-card px-4 py-1 text-xs sm:text-sm font-medium text-blue-card-txt">
+                                    <p className={`rounded-full px-4 py-1 text-xs sm:text-sm font-medium ${getStatusStyle(umkm.status)}`}>
                                         {umkm.status}
+                                    </p>
+
+                                    <p className={`rounded-full px-4 py-1 text-xs sm:text-sm font-medium text-white ${getRiskColor(umkm.risk)}`}>
+                                        {umkm.riskLabel}
                                     </p>
                                 </div>
 
                                 <p className="break-words text-sm sm:text-base text-muted-foreground">
-                                    {umkm.id} • {umkm.owner}
+                                    {umkm.id} - {umkm.category} - Band {umkm.band}
                                 </p>
                             </div>
 
@@ -108,59 +261,52 @@ export default function Debitur() {
                                 </p>
 
                                 <h1 className="break-words text-2xl sm:text-3xl font-bold">
-                                    Rp{" "}
-                                    {umkm.limit.toLocaleString("id-ID")}
+                                    Rp {umkm.limit.toLocaleString("id-ID")}
                                 </h1>
                             </div>
                         </div>
 
-                        {/* middle */}
-                        <div className="mt-6 sm:mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl border p-4">
+                        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-xl border p-4">
                                 <p className="text-sm text-muted-foreground">
                                     Risk Score
                                 </p>
-
-                                <h1 className="mt-2 text-2xl sm:text-3xl font-bold">
-                                    {umkm.score}
+                                <h1 className="mt-2 text-2xl font-bold">
+                                    {umkm.score}/100
                                 </h1>
                             </div>
 
-                            <div className="rounded-2xl border p-4">
+                            <div className="rounded-xl border p-4">
                                 <p className="text-sm text-muted-foreground">
-                                    Risk Level
+                                    Confidence
                                 </p>
-
-                                <h1 className="mt-2 break-words text-base sm:text-lg font-semibold">
-                                    {umkm.risk}
+                                <h1 className="mt-2 text-base font-semibold">
+                                    {umkm.confidence}
                                 </h1>
                             </div>
 
-                            <div className="rounded-2xl border p-4">
+                            <div className="rounded-xl border p-4">
                                 <p className="text-sm text-muted-foreground">
-                                    Category
+                                    QRIS Monthly
                                 </p>
-
-                                <h1 className="mt-2 break-words text-base sm:text-lg font-semibold">
-                                    {umkm.category}
+                                <h1 className="mt-2 text-base font-semibold">
+                                    Rp {umkm.input.qris_volume_monthly.toLocaleString("id-ID")}
                                 </h1>
                             </div>
 
-                            <div className="rounded-2xl border p-4">
+                            <div className="rounded-xl border p-4">
                                 <p className="text-sm text-muted-foreground">
-                                    Decision Confidence
+                                    PLN Delay
                                 </p>
-
-                                <h1 className="mt-2 text-base sm:text-lg font-semibold text-green-600">
-                                    High
+                                <h1 className="mt-2 text-base font-semibold">
+                                    {umkm.input.pln_delay_days} hari
                                 </h1>
                             </div>
                         </div>
 
-                        {/* bottom */}
-                        <div className="mt-6 sm:mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                             <button
-                                onClick={() => handleDelete(umkm.id)}
+                                onClick={() => handleDelete(umkm)}
                                 className="w-full lg:w-fit rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm sm:text-base font-medium text-red-600 transition hover:bg-red-100"
                             >
                                 Delete
@@ -168,11 +314,52 @@ export default function Debitur() {
 
                             <DecisionActions
                                 onReview={() => handleReview(umkm)}
+                                onDecline={() =>
+                                    updateStatus(
+                                        umkm,
+                                        "Rejected",
+                                        "Ditolak dari dashboard oleh analis."
+                                    )
+                                }
+                                onApprove={() =>
+                                    updateStatus(
+                                        umkm,
+                                        "Approved",
+                                        "Disetujui dari dashboard oleh analis."
+                                    )
+                                }
                             />
                         </div>
-                    </div>
+                    </motion.article>
                 ))}
             </div>
+            )}
+        </main>
+    )
+}
+
+function DashboardSkeleton() {
+    return (
+        <div className="mt-6 grid gap-4 sm:gap-6">
+            {[1, 2, 3].map((item) => (
+                <div key={item} className="rounded-2xl border p-4 sm:p-6">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-3">
+                            <Skeleton className="h-7 w-52" />
+                            <Skeleton className="h-4 w-72 max-w-full" />
+                        </div>
+                        <div className="space-y-3 lg:text-right">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-8 w-48" />
+                        </div>
+                    </div>
+                    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        {[1, 2, 3, 4].map((card) => (
+                            <Skeleton key={card} className="h-24 rounded-xl" />
+                        ))}
+                    </div>
+                </div>
+            ))}
         </div>
     )
 }

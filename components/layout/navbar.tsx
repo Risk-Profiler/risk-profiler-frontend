@@ -9,16 +9,24 @@ export default function Navbar(){
 
     return (
         <>
-            <nav className="flex justify-between items-center lg:hidden bg-white p-4 border-b fixed top-0 z-50 w-full">
-                <div>
-                    <h1 className="text-xl font-bold">Risk Profiler</h1>
-                    <p className="text-sm text-muted-foreground">Credit Scoring</p>
+            <nav className="flex justify-between items-center lg:hidden bg-background/95 p-4 border-b fixed top-0 z-50 w-full backdrop-blur">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-accent text-sm font-bold text-white">
+                        RP
+                    </div>
+                    <div>
+                        <h1 className="text-lg font-bold">Risk Profiler</h1>
+                    </div>
                 </div>
 
-                <Menu 
-                    className="hover:rotate-90 transition cursor-pointer" 
-                    onClick={() => setOpenNavMenu(true)} 
-                />
+                <button
+                    type="button"
+                    aria-label="Open navigation"
+                    onClick={() => setOpenNavMenu(true)}
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border transition hover:bg-muted"
+                >
+                    <Menu size={20} />
+                </button>
             </nav>
 
             <NavbarMenu 

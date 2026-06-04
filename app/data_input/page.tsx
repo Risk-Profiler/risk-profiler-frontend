@@ -1,18 +1,28 @@
 "use client"
 
-import { CircleAlert } from "lucide-react"
-
+import { CircleAlert, Loader2, WalletCards } from "lucide-react"
 import { useRouter } from "next/navigation"
-
+import type { ReactNode } from "react"
+import { toast } from "sonner"
 import * as z from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
+
+import { requestRiskPrediction } from "@/lib/api"
+import {
+    createRiskProfile,
+} from "@/lib/risk-profile"
+import {
+    savePredictionResult,
+    saveSelectedProfile,
+    upsertProfile,
+} from "@/lib/risk-storage"
 
 const requiredNumber = (field: string) =>
     z
         .string()
         .min(1, `${field} wajib diisi`)
-        .refine((val) => !isNaN(Number(val)), {
+        .refine((val) => !Number.isNaN(Number(val)), {
             message: `${field} harus berupa angka`,
         })
         .transform((val) => Number(val))
@@ -21,22 +31,51 @@ const formSchema = z.object({
     name: z.string().min(1, "Nama UMKM tidak boleh kosong."),
     business_category: z
         .string()
-        .min(1, "Business Category tidak boleh kosong."),
-    business_age_months: requiredNumber("Business Age"),
-    qris_volume_monthly: requiredNumber("QRIS Volume Monthly"),
-    qris_active_days: requiredNumber("QRIS Active Days"),
-    ecommerce_rating: requiredNumber("E-commerce Rating"),
-    pln_delay_days: requiredNumber("PLN Delay Days"),
+        .min(1, "Kategori bisnis tidak boleh kosong."),
+    business_age_months: requiredNumber("Usia usaha").pipe(
+        z.number().min(0, "Usia usaha tidak boleh negatif")
+    ),
+    qris_volume_monthly: requiredNumber("Volume QRIS bulanan").pipe(
+        z.number().min(0, "Volume QRIS tidak boleh negatif")
+    ),
+    qris_active_days: requiredNumber("Hari aktif QRIS").pipe(
+        z.number().min(0).max(31, "Hari aktif QRIS maksimal 31")
+    ),
+    ecommerce_rating: requiredNumber("Rating e-commerce").pipe(
+        z.number().min(0).max(5, "Rating maksimal 5")
+    ),
+    pln_delay_days: requiredNumber("Keterlambatan PLN").pipe(
+        z.number().min(0, "Keterlambatan tidak boleh negatif")
+    ),
+    pdam_bill_avg: requiredNumber("Rata-rata tagihan PDAM").pipe(
+        z.number().min(0, "Tagihan PDAM tidak boleh negatif")
+    ),
+    pdam_late_payments: requiredNumber("Keterlambatan PDAM").pipe(
+        z.number().min(0, "Keterlambatan PDAM tidak boleh negatif")
+    ),
 })
 
 type FormValidation = z.infer<typeof formSchema>
 
-type PredictionResponse = {
-    score: number
-    risk_level: string
-    recommended_limit: number
-    probability: number
-    band: string
+const categories = ["fnb", "retail", "fashion", "jasa"]
+
+const fieldClass =
+    "w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
+
+function createMerchantId() {
+    return `UMKM-${Date.now().toString(36).toUpperCase()}`
+}
+
+function normalizeCategory(category: string) {
+    const normalized = category.toLowerCase().trim()
+    const aliases: Record<string, string> = {
+        "f & b": "fnb",
+        "f&b": "fnb",
+        services: "jasa",
+        service: "jasa",
+    }
+
+    return aliases[normalized] ?? normalized
 }
 
 export default function InputPage() {
@@ -45,7 +84,8 @@ export default function InputPage() {
     const {
         register,
         handleSubmit,
-        formState: { errors },
+        setValue,
+        formState: { errors, isSubmitting },
     } = useForm<
         z.input<typeof formSchema>,
         unknown,
@@ -60,260 +100,258 @@ export default function InputPage() {
             qris_active_days: "",
             ecommerce_rating: "",
             pln_delay_days: "",
+            pdam_bill_avg: "0",
+            pdam_late_payments: "0",
         },
     })
 
     const onSubmit = async (data: FormValidation) => {
         const payload = {
-            merchant_id: 1,
+            merchant_id: createMerchantId(),
             ...data,
+            business_category: normalizeCategory(data.business_category),
         }
 
-        const response = await fetch("http://127.0.0.1:8000/predict", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
+        let result
+
+        try {
+            result = await requestRiskPrediction(payload)
+        } catch (error) {
+            console.error("Prediction server failed:", error)
+            toast.error("Server analisis tidak merespons", {
+                description:
+                    "Pastikan API analisis berjalan sebelum membuat profil risiko.",
+            })
+            return
+        }
+
+        const profile = createRiskProfile(payload, result)
+
+        savePredictionResult(profile)
+        saveSelectedProfile(profile)
+        upsertProfile(profile)
+
+        toast.success("Profil risiko berhasil dibuat", {
+            description: `${profile.name} mendapatkan skor ${profile.score}/100 dan plafon Rp ${profile.limit.toLocaleString("id-ID")}.`,
         })
 
-        const result: PredictionResponse = await response.json()
-
-        localStorage.setItem(
-            "prediction_result",
-            JSON.stringify(result)
-        )
-
-        const newDebitur = {
-            id: `LA-2026-${Math.floor(Math.random() * 9000) + 1000}`,
-            name: data.name,
-            owner: "New Applicant",
-            category: data.business_category,
-            score: result.score,
-            risk: result.risk_level,
-            limit: result.recommended_limit,
-            status: "Pending",
-        }
-
-        const existingDebitur = JSON.parse(
-            localStorage.getItem("debitur_list") || "[]"
-        )
-
-        localStorage.setItem(
-            "debitur_list",
-            JSON.stringify([newDebitur, ...existingDebitur])
-        )
-
-        router.push("/dashboard")
+        router.push("/details")
     }
 
     return (
-        <div className="min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-center">
+        <main className="min-h-screen overflow-hidden p-4 sm:p-6 lg:p-8">
+            <div className="grid gap-6 xl:grid-cols-[0.95fr_1.4fr]">
+                <section className="rounded-2xl border bg-background p-6 sm:p-8">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-light-green-accent text-green-accent">
+                        <WalletCards size={24} />
+                    </div>
+
+                    <div className="mt-6 space-y-3">
+                        <h1 className="break-words text-3xl font-bold sm:text-4xl">
+                            Input Data UMKM
+                        </h1>
+
+                        <p className="text-sm sm:text-base leading-relaxed text-muted-foreground">
+                            Masukkan data operasional untuk membuat profil
+                            risiko dan rekomendasi plafon.
+                        </p>
+                    </div>
+                </section>
+
                 <form
                     noValidate
                     onSubmit={handleSubmit(onSubmit)}
-                    className="w-full max-w-5xl space-y-6 rounded-3xl border bg-background p-6 sm:p-8"
+                    className="space-y-6 rounded-2xl border bg-background p-6 sm:p-8"
                 >
-                    {/* header */}
-                    <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">
-                            Credit Scoring Form
-                        </p>
-
-                        <h1 className="break-words text-3xl sm:text-4xl font-bold">
-                            Input UMKM Data
-                        </h1>
-
-                        <p className="text-sm sm:text-base text-muted-foreground">
-                            Masukkan data UMKM untuk melakukan analisis risiko
-                            kredit secara otomatis.
-                        </p>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <h2 className="break-words text-2xl font-bold">
+                                Data Pengajuan
+                            </h2>
+                        </div>
                     </div>
 
-                    <hr />
-
-                    {/* nama */}
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                            Nama UMKM
-                        </label>
-
-                        <input
-                            type="text"
-                            placeholder="Nama UMKM-mu"
-                            className="w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
-                            {...register("name")}
-                        />
-
-                        {errors.name && (
-                            <p className="flex items-center gap-1 text-xs text-red-600">
-                                <CircleAlert size={14} />
-                                {errors.name.message}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* grid form */}
                     <div className="grid gap-6 md:grid-cols-2">
-                        {/* category */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                                Business Category
-                            </label>
-
+                        <FieldError
+                            label="Nama UMKM"
+                            error={errors.name?.message}
+                        >
                             <input
                                 type="text"
-                                placeholder="fnb / retail / fashion"
-                                className="w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
-                                {...register("business_category")}
+                                placeholder="Contoh: Warung Kopi Sari"
+                                className={fieldClass}
+                                {...register("name")}
                             />
+                        </FieldError>
 
-                            {errors.business_category && (
-                                <p className="flex items-center gap-1 text-xs text-red-600">
-                                    <CircleAlert size={14} />
-                                    {errors.business_category.message}
-                                </p>
-                            )}
-                        </div>
+                        <FieldError
+                            label="Kategori Bisnis"
+                            error={errors.business_category?.message}
+                        >
+                            <select
+                                className={fieldClass}
+                                {...register("business_category")}
+                            >
+                                <option value="">Pilih kategori</option>
+                                {categories.map((category) => (
+                                    <option key={category} value={category}>
+                                        {category.toUpperCase()}
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {categories.map((category) => (
+                                    <button
+                                        key={category}
+                                        type="button"
+                                        onClick={() =>
+                                            setValue(
+                                                "business_category",
+                                                category,
+                                                { shouldValidate: true }
+                                            )
+                                        }
+                                        className="rounded-full border px-3 py-1 text-xs text-muted-foreground transition hover:border-green-accent hover:text-green-accent"
+                                    >
+                                        {category}
+                                    </button>
+                                ))}
+                            </div>
+                        </FieldError>
 
-                        {/* age */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                                Business Age (Months)
-                            </label>
-
+                        <FieldError
+                            label="Usia Usaha (bulan)"
+                            error={errors.business_age_months?.message}
+                        >
                             <input
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="24"
-                                className="w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
+                                className={fieldClass}
                                 {...register("business_age_months")}
                             />
+                        </FieldError>
 
-                            {errors.business_age_months && (
-                                <p className="flex items-center gap-1 text-xs text-red-600">
-                                    <CircleAlert size={14} />
-                                    {
-                                        errors.business_age_months
-                                            .message
-                                    }
-                                </p>
-                            )}
-                        </div>
-
-                        {/* qris volume */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                                QRIS Volume Monthly
-                            </label>
-
+                        <FieldError
+                            label="Volume QRIS Bulanan"
+                            error={errors.qris_volume_monthly?.message}
+                        >
                             <input
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="5000000"
-                                className="w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
+                                className={fieldClass}
                                 {...register("qris_volume_monthly")}
                             />
+                        </FieldError>
 
-                            {errors.qris_volume_monthly && (
-                                <p className="flex items-center gap-1 text-xs text-red-600">
-                                    <CircleAlert size={14} />
-                                    {
-                                        errors.qris_volume_monthly
-                                            .message
-                                    }
-                                </p>
-                            )}
-                        </div>
-
-                        {/* qris active days */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                                QRIS Active Days
-                            </label>
-
+                        <FieldError
+                            label="Hari Aktif QRIS"
+                            error={errors.qris_active_days?.message}
+                        >
                             <input
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="22"
-                                className="w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
+                                className={fieldClass}
                                 {...register("qris_active_days")}
                             />
+                        </FieldError>
 
-                            {errors.qris_active_days && (
-                                <p className="flex items-center gap-1 text-xs text-red-600">
-                                    <CircleAlert size={14} />
-                                    {
-                                        errors.qris_active_days
-                                            .message
-                                    }
-                                </p>
-                            )}
-                        </div>
-
-                        {/* ecommerce */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                                E-commerce Rating
-                            </label>
-
+                        <FieldError
+                            label="Rating E-Commerce"
+                            error={errors.ecommerce_rating?.message}
+                        >
                             <input
                                 type="text"
-                                inputMode="numeric"
+                                inputMode="decimal"
                                 placeholder="4.8"
-                                className="w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
+                                className={fieldClass}
                                 {...register("ecommerce_rating")}
                             />
+                        </FieldError>
 
-                            {errors.ecommerce_rating && (
-                                <p className="flex items-center gap-1 text-xs text-red-600">
-                                    <CircleAlert size={14} />
-                                    {
-                                        errors.ecommerce_rating
-                                            .message
-                                    }
-                                </p>
-                            )}
-                        </div>
-
-                        {/* pln */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                                PLN Delay Days
-                            </label>
-
+                        <FieldError
+                            label="Keterlambatan PLN (hari)"
+                            error={errors.pln_delay_days?.message}
+                        >
                             <input
                                 type="text"
                                 inputMode="numeric"
                                 placeholder="2"
-                                className="w-full rounded-xl border bg-background px-4 py-3 text-sm sm:text-base outline-none transition focus:border-green-accent"
+                                className={fieldClass}
                                 {...register("pln_delay_days")}
                             />
+                        </FieldError>
 
-                            {errors.pln_delay_days && (
-                                <p className="flex items-center gap-1 text-xs text-red-600">
-                                    <CircleAlert size={14} />
-                                    {
-                                        errors.pln_delay_days
-                                            .message
-                                    }
-                                </p>
-                            )}
-                        </div>
+                        <FieldError
+                            label="Rata-rata Tagihan PDAM"
+                            error={errors.pdam_bill_avg?.message}
+                        >
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="150000"
+                                className={fieldClass}
+                                {...register("pdam_bill_avg")}
+                            />
+                        </FieldError>
+
+                        <FieldError
+                            label="Keterlambatan PDAM (kali)"
+                            error={errors.pdam_late_payments?.message}
+                        >
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="0"
+                                className={fieldClass}
+                                {...register("pdam_late_payments")}
+                            />
+                        </FieldError>
                     </div>
 
-                    {/* submit */}
-                    <div className="flex flex-col sm:flex-row sm:justify-end">
+                    <div className="flex flex-col gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
                         <button
                             type="submit"
-                            className="w-full sm:w-fit rounded-xl bg-green-accent px-8 py-3 text-sm sm:text-base font-medium text-white transition hover:opacity-90 cursor-pointer"
+                            disabled={isSubmitting}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-accent px-8 py-3 text-sm sm:ml-auto sm:w-fit sm:text-base font-medium text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                            Add UMKM
+                            {isSubmitting && (
+                                <Loader2 size={18} className="animate-spin" />
+                            )}
+                            Generate Risk Profile
                         </button>
                     </div>
                 </form>
             </div>
+        </main>
+    )
+}
+
+function FieldError({
+    label,
+    error,
+    children,
+}: {
+    label: string
+    error?: string
+    children: ReactNode
+}) {
+    return (
+        <div className="space-y-2">
+            <label className="text-sm font-medium">
+                {label}
+            </label>
+
+            {children}
+
+            {error && (
+                <p className="flex items-center gap-1 text-xs text-red-600">
+                    <CircleAlert size={14} />
+                    {error}
+                </p>
+            )}
         </div>
     )
 }

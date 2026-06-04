@@ -1,7 +1,5 @@
-export default function Debitur(){
-    return (
-        <>
-            debitur
-        </>
-    )
+import { redirect } from "next/navigation"
+
+export default function DebiturPage() {
+    redirect("/dashboard")
 }
