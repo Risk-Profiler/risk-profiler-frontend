@@ -595,11 +595,6 @@ function buildDataSources(input: RiskFormInput): DataSourceItem[] {
       label: `PDAM - ${input.pdam_late_payments} kali telat`,
       available: input.pdam_bill_avg >= 0,
     },
-    {
-      id: 6,
-      label: "SLIK / data bank eksternal",
-      available: false,
-    },
   ]
 }
 

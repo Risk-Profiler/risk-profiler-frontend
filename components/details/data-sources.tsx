@@ -11,6 +11,10 @@ export default function DataSources({
     dataSources,
     loading = false,
 }: DataSourcesProps) {
+    const visibleDataSources = dataSources.filter(
+        (source) => !/slik|data bank eksternal/i.test(source.label)
+    )
+
     if (loading) {
         return <DataSourcesSkeleton />
     }
@@ -22,7 +26,7 @@ export default function DataSources({
             </h1>
 
             <div className="flex flex-wrap gap-2 text-xs sm:text-sm font-semibold">
-                {dataSources.map((source) => (
+                {visibleDataSources.map((source) => (
                     <div
                         key={source.id}
                         className={`flex w-fit max-w-full items-center gap-2 rounded-full px-3 sm:px-4 py-2 ${

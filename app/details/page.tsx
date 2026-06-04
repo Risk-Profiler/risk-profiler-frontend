@@ -30,9 +30,18 @@ export default function Details() {
 
     useEffect(() => {
         const hydrated = readSelectedProfile()
+        const shouldOpenRevision =
+            new URLSearchParams(window.location.search).get("revision") === "1"
 
         if (hydrated) {
-            window.setTimeout(() => setSelectedDebitur(hydrated), 0)
+            window.setTimeout(() => {
+                setSelectedDebitur(hydrated)
+
+                if (shouldOpenRevision) {
+                    setRevisionDialogOpen(true)
+                    window.history.replaceState(null, "", "/details")
+                }
+            }, 0)
             saveSelectedProfile(hydrated)
         }
 
