@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { XIcon, ChevronRight, Check, Pencil } from "lucide-react"
+import { XIcon, ChevronRight, Check, Pencil, Loader2 } from "lucide-react"
 import {
   Carousel,
   CarouselContent,
@@ -13,6 +13,7 @@ import { getDecisionDisplay, isDecisionFinal } from "@/lib/risk-profile"
 
 type DecisionActionsProps = {
     status?: string
+    pendingAction?: "approve" | "reject" | "revision" | null
     onReject: () => void
     onRevise: () => void
     onApprove: () => void
@@ -20,6 +21,7 @@ type DecisionActionsProps = {
 
 export default function DecisionActions({
     status,
+    pendingAction = null,
     onReject,
     onRevise,
     onApprove,
@@ -31,18 +33,21 @@ export default function DecisionActions({
 
     const actions = [
         {
+            id: "reject",
             label: "Rekomendasikan Penolakan",
             icon: XIcon,
             onClick: onReject,
             className: "bg-light-red-accent text-red-accent",
         },
         {
+            id: "revision",
             label: "Ajukan Revisi Plafon",
             icon: ChevronRight,
             onClick: onRevise,
             className: "bg-light-yellowish-accent text-yellowish-accent",
         },
         {
+            id: "approve",
             label: "Rekomendasikan Approval",
             icon: Check,
             onClick: onApprove,
@@ -51,6 +56,8 @@ export default function DecisionActions({
     ]
 
     if (finalDecision && !changingDecision) {
+        const isPending = Boolean(pendingAction)
+
         return (
             <div className="sticky bottom-0 border-t bg-background p-4">
                 <div className={`flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${display.borderClassName}`}>
@@ -66,10 +73,15 @@ export default function DecisionActions({
                     <button
                         type="button"
                         onClick={() => setChangingStatus(status ?? "")}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-semibold transition hover:bg-muted sm:w-fit"
+                        disabled={isPending}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-semibold transition hover:bg-muted disabled:cursor-wait disabled:opacity-70 sm:w-fit"
                     >
-                        <Pencil size={16} />
-                        Ubah Keputusan
+                        {isPending ? (
+                            <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                            <Pencil size={16} />
+                        )}
+                        {isPending ? "Menyimpan keputusan" : "Ubah Keputusan"}
                     </button>
                 </div>
             </div>
@@ -97,17 +109,25 @@ export default function DecisionActions({
             <div className="hidden lg:grid grid-cols-3 text-sm font-semibold border-t">
                 {actions.map((action, index) => {
                     const Icon = action.icon
+                    const isPending = pendingAction === action.id
 
                     return (
                         <button
                             key={action.label}
                             onClick={action.onClick}
-                            className={`flex justify-center items-center py-6 gap-2 hover:brightness-95 transition cursor-pointer ${action.className} ${
+                            disabled={Boolean(pendingAction)}
+                            className={`flex justify-center items-center py-6 gap-2 hover:brightness-95 transition cursor-pointer disabled:cursor-wait disabled:opacity-75 ${action.className} ${
                                 index === 1 ? "border-x" : ""
                             }`}
                         >
-                            <Icon size={20} />
-                            <span className="underline">{action.label}</span>
+                            {isPending ? (
+                                <Loader2 size={20} className="animate-spin" />
+                            ) : (
+                                <Icon size={20} />
+                            )}
+                            <span className="underline">
+                                {isPending ? "Menyimpan keputusan" : action.label}
+                            </span>
                         </button>
                     )
                 })}
@@ -117,15 +137,23 @@ export default function DecisionActions({
                 <CarouselContent>
                     {actions.map((action) => {
                         const Icon = action.icon
+                        const isPending = pendingAction === action.id
 
                         return (
                             <CarouselItem key={action.label}>
                                 <button
                                     onClick={action.onClick}
-                                    className={`flex w-full justify-center items-center py-6 gap-2 hover:brightness-95 transition cursor-pointer ${action.className}`}
+                                    disabled={Boolean(pendingAction)}
+                                    className={`flex w-full justify-center items-center py-6 gap-2 hover:brightness-95 transition cursor-pointer disabled:cursor-wait disabled:opacity-75 ${action.className}`}
                                 >
-                                    <Icon size={20} />
-                                    <span className="underline">{action.label}</span>
+                                    {isPending ? (
+                                        <Loader2 size={20} className="animate-spin" />
+                                    ) : (
+                                        <Icon size={20} />
+                                    )}
+                                    <span className="underline">
+                                        {isPending ? "Menyimpan keputusan" : action.label}
+                                    </span>
                                 </button>
                             </CarouselItem>
                         )

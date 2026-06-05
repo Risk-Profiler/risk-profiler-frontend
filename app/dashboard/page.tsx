@@ -1,38 +1,38 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-    Check,
-    CheckCircle2,
-    ChevronRight,
-    Eye,
     FilePlus2,
-    ListFilter,
-    MoreHorizontal,
+    Loader2,
     Search,
-    Trash2,
     WalletCards,
-    X,
-    XCircle,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button"
+import ArchiveActionMenu from "@/components/dashboard/archive-action-menu"
+import DashboardSkeleton from "@/components/dashboard/dashboard-skeleton"
+import FilterDropdown, {
+    SelectedFilterChip,
+} from "@/components/dashboard/filter-dropdown"
 import { Input } from "@/components/ui/input"
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover"
-import { Slider } from "@/components/ui/slider"
-import { Skeleton } from "@/components/ui/skeleton"
 import { requestDecisionUpdate } from "@/lib/api"
 import {
+    formatAge,
+    formatArchiveDate,
+    formatCurrency,
+    getLimitBounds,
+    isInteractiveTarget,
+    parseCurrencyInput,
+    sortOptions,
+    statusOrder,
+    type DashboardPendingAction,
+    type SortOption,
+} from "@/lib/dashboard"
+import {
     getDecisionDisplay,
-    getDecisionState,
     getRiskColor,
     getStatusStyle,
     type RiskProfile,
@@ -48,123 +48,6 @@ import {
     type RiskStatusFilter,
 } from "@/lib/risk-storage"
 
-const statusOrder: RiskStatusFilter[] = [
-    "all",
-    "pending",
-    "approved",
-    "rejected",
-    "revision",
-]
-
-type SortOption =
-    | "submit-newest"
-    | "submit-oldest"
-    | "age-oldest"
-    | "age-youngest"
-
-const sortOptions: Array<{
-    value: SortOption
-    label: string
-}> = [
-    {
-        value: "submit-newest",
-        label: "Submit terbaru",
-    },
-    {
-        value: "submit-oldest",
-        label: "Submit terlama",
-    },
-    {
-        value: "age-oldest",
-        label: "Usia tertua",
-    },
-    {
-        value: "age-youngest",
-        label: "Usia termuda",
-    },
-]
-
-const MAX_LIMIT_FILTER = 50000000
-
-function formatCurrency(value: number) {
-    return `Rp ${value.toLocaleString("id-ID")}`
-}
-
-function parseCurrencyInput(value: string) {
-    const digits = value.replace(/\D/g, "")
-
-    if (!digits) {
-        return null
-    }
-
-    return Number(digits)
-}
-
-function formatCurrencyInput(value: string) {
-    const parsed = parseCurrencyInput(value)
-
-    if (parsed === null) {
-        return ""
-    }
-
-    return formatCurrency(Math.min(parsed, MAX_LIMIT_FILTER))
-}
-
-function getLimitBounds(profiles: RiskProfile[]) {
-    if (profiles.length === 0) {
-        return {
-            min: 0,
-            max: 100000000,
-        }
-    }
-
-    const limits = profiles.map((profile) => profile.limit)
-    const min = Math.min(...limits)
-    const max = Math.max(...limits)
-
-    return {
-        min: Math.max(0, Math.floor(min / 1000000) * 1000000),
-        max: Math.min(
-            MAX_LIMIT_FILTER,
-            Math.max(1000000, Math.ceil(max / 1000000) * 1000000)
-        ),
-    }
-}
-
-function formatArchiveDate(value: string) {
-    const date = new Date(value)
-
-    if (Number.isNaN(date.getTime())) {
-        return {
-            year: "----",
-            date: "-",
-        }
-    }
-
-    return {
-        year: String(date.getFullYear()),
-        date: new Intl.DateTimeFormat("id-ID", {
-            day: "2-digit",
-            month: "short",
-        }).format(date),
-    }
-}
-
-function formatAge(months: number) {
-    const years = Math.floor(months / 12)
-    const remainingMonths = months % 12
-
-    if (years === 0) return `${remainingMonths} bln`
-    if (remainingMonths === 0) return `${years} thn`
-    return `${years} thn ${remainingMonths} bln`
-}
-
-function isInteractiveTarget(target: EventTarget | null) {
-    return target instanceof HTMLElement
-        ? Boolean(target.closest("button, a, input, select, textarea"))
-        : false
-}
-
 export default function Dashboard() {
     const router = useRouter()
     const [umkmData, setUmkmData] = useState<RiskProfile[]>([])
@@ -175,6 +58,10 @@ export default function Dashboard() {
     const [limitMax, setLimitMax] = useState("")
     const [selectedCategories, setSelectedCategories] = useState<string[]>([])
     const [loading, setLoading] = useState(true)
+    const [pendingAction, setPendingAction] = useState<{
+        id: string
+        type: DashboardPendingAction
+    } | null>(null)
 
     useEffect(() => {
         const profiles = readProfiles()
@@ -308,6 +195,9 @@ export default function Dashboard() {
     }
 
     const handleReview = (umkm: RiskProfile) => {
+        if (pendingAction) return
+
+        setPendingAction({ id: umkm.id, type: "review" })
         saveSelectedProfile(umkm)
         toast.info("Membuka detail analisis", {
             description: `${umkm.name} siap direview.`,
@@ -316,6 +206,9 @@ export default function Dashboard() {
     }
 
     const handleRevise = (umkm: RiskProfile) => {
+        if (pendingAction) return
+
+        setPendingAction({ id: umkm.id, type: "revise" })
         saveSelectedProfile(umkm)
         toast.info("Membuka revisi plafon", {
             description: `${umkm.name} siap direvisi.`,
@@ -324,7 +217,11 @@ export default function Dashboard() {
     }
 
     const handleDelete = (umkm: RiskProfile) => {
+        if (pendingAction) return
+
+        setPendingAction({ id: umkm.id, type: "delete" })
         persistData(removeProfile(umkm.id))
+        setPendingAction(null)
         toast.success("Pengajuan dihapus", {
             description: `${umkm.name} sudah dikeluarkan dari daftar.`,
         })
@@ -335,6 +232,17 @@ export default function Dashboard() {
         status: "Approved" | "Rejected" | "Revision Requested",
         note: string
     ) => {
+        if (pendingAction) return
+
+        const actionType =
+            status === "Approved"
+                ? "approve"
+                : status === "Rejected"
+                  ? "reject"
+                  : "revise"
+
+        setPendingAction({ id: profile.id, type: actionType })
+
         const updatedData = umkmData.map((umkm) =>
             umkm.id === profile.id
                 ? {
@@ -362,6 +270,10 @@ export default function Dashboard() {
                 description:
                     "Sinkronisasi ke backend belum berhasil. Data tetap tersimpan di browser.",
             })
+        } finally {
+            setPendingAction((current) =>
+                current?.id === profile.id ? null : current
+            )
         }
     }
 
@@ -543,6 +455,17 @@ export default function Dashboard() {
                             const archiveDate = formatArchiveDate(umkm.createdAt)
                             const compactStatus =
                                 statusFilters[getProfileFilter(umkm)].label
+                            const rowPendingAction =
+                                pendingAction?.id === umkm.id
+                                    ? pendingAction.type
+                                    : null
+                            const isOpening =
+                                rowPendingAction === "review" ||
+                                rowPendingAction === "revise"
+                            const isSavingDecision =
+                                rowPendingAction === "approve" ||
+                                rowPendingAction === "reject"
+                            const isRowBusy = isOpening || isSavingDecision
 
                             return (
                                 <motion.article
@@ -567,8 +490,18 @@ export default function Dashboard() {
                                         duration: 0.22,
                                         delay: index * 0.025,
                                     }}
-                                    className="group grid cursor-pointer gap-4 px-4 py-4 transition hover:bg-light-green-accent/35 focus-visible:bg-light-green-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-accent/20 sm:px-5 md:grid-cols-[1fr_auto] md:items-start lg:grid-cols-[76px_minmax(260px,1.7fr)_minmax(180px,.85fr)_minmax(190px,1fr)_44px] lg:items-center"
+                                    className={`group relative grid cursor-pointer gap-4 px-4 py-4 transition hover:bg-light-green-accent/35 focus-visible:bg-light-green-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-accent/20 sm:px-5 md:grid-cols-[1fr_auto] md:items-start lg:grid-cols-[76px_minmax(260px,1.7fr)_minmax(180px,.85fr)_minmax(190px,1fr)_44px] lg:items-center ${
+                                        isRowBusy ? "pointer-events-none opacity-70" : ""
+                                    }`}
                                 >
+                                    {isRowBusy && (
+                                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/55 backdrop-blur-[1px]">
+                                            <span className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-2 text-xs font-semibold text-green-accent shadow-sm">
+                                                <Loader2 size={15} className="animate-spin" />
+                                                {isOpening ? "Membuka detail" : "Menyimpan keputusan"}
+                                            </span>
+                                        </div>
+                                    )}
                                     <div className="flex items-center justify-between gap-3 md:col-span-2 lg:col-span-1 lg:block">
                                         <p className="text-sm font-semibold text-green-accent lg:text-base">
                                             {archiveDate.year}
@@ -612,6 +545,8 @@ export default function Dashboard() {
                                     >
                                         <ArchiveActionMenu
                                             profile={umkm}
+                                            pendingAction={rowPendingAction}
+                                            disabled={Boolean(pendingAction)}
                                             onReview={() => handleReview(umkm)}
                                             onApprove={() =>
                                                 updateStatus(
@@ -640,402 +575,5 @@ export default function Dashboard() {
                 </div>
             )}
         </main>
-    )
-}
-
-function SelectedFilterChip({
-    label,
-    onClear,
-}: {
-    label: string
-    onClear: () => void
-}) {
-    return (
-        <span className="inline-flex min-h-8 max-w-full items-center gap-2 rounded-full bg-light-green-accent px-3 py-1 text-xs font-semibold text-green-accent">
-            <span className="truncate">
-                {label}
-            </span>
-            <button
-                type="button"
-                aria-label={`Hapus filter ${label}`}
-                onClick={onClear}
-                className="inline-flex size-5 shrink-0 items-center justify-center rounded-full transition hover:bg-green-accent hover:text-white focus:outline-none focus:ring-2 focus:ring-green-accent/20"
-            >
-                <X size={13} />
-            </button>
-        </span>
-    )
-}
-
-function FilterDropdown({
-    activeCount,
-    sortBy,
-    onSortChange,
-    limitMin,
-    limitMax,
-    onLimitMinChange,
-    onLimitMaxChange,
-    limitBounds,
-    categoryOptions,
-    selectedCategories,
-    onSelectedCategoriesChange,
-    onReset,
-}: {
-    activeCount: number
-    sortBy: SortOption
-    onSortChange: (value: SortOption) => void
-    limitMin: string
-    limitMax: string
-    onLimitMinChange: (value: string) => void
-    onLimitMaxChange: (value: string) => void
-    limitBounds: { min: number; max: number }
-    categoryOptions: string[]
-    selectedCategories: string[]
-    onSelectedCategoriesChange: (value: string[]) => void
-    onReset: () => void
-}) {
-    const selectedSet = new Set(selectedCategories)
-    const parsedMin = parseCurrencyInput(limitMin)
-    const parsedMax = parseCurrencyInput(limitMax)
-    const sliderMin = parsedMin ?? limitBounds.min
-    const sliderMax = parsedMax ?? limitBounds.max
-    const sliderValue: [number, number] =
-        sliderMin <= sliderMax
-            ? [sliderMin, sliderMax]
-            : [sliderMax, sliderMin]
-    const sliderStep = 500000
-
-    const toggleCategory = (category: string) => {
-        if (selectedSet.has(category)) {
-            onSelectedCategoriesChange(
-                selectedCategories.filter((item) => item !== category)
-            )
-            return
-        }
-
-        onSelectedCategoriesChange([...selectedCategories, category])
-    }
-
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 w-full justify-between rounded-xl border-green-accent/25 px-3.5 text-green-accent hover:bg-light-green-accent sm:w-fit"
-                >
-                    <span className="inline-flex items-center gap-2">
-                        <ListFilter size={16} />
-                        Filter
-                    </span>
-                    {activeCount > 0 && (
-                        <span className="ml-3 rounded-full bg-green-accent px-2 py-0.5 text-xs font-bold text-white">
-                            {activeCount}
-                        </span>
-                    )}
-                </Button>
-            </PopoverTrigger>
-
-            <PopoverContent
-                align="end"
-                className="w-[min(26rem,calc(100vw-2rem))] border-green-accent/20 p-4"
-            >
-                <div className="space-y-5">
-                    <div className="flex items-center justify-between gap-3">
-                        <div>
-                            <h3 className="text-sm font-bold">
-                                Filter UMKM
-                            </h3>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                Atur urutan, plafon, dan tipe bisnis.
-                            </p>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={onReset}
-                            disabled={activeCount === 0}
-                            className="text-green-accent hover:bg-light-green-accent hover:text-green-accent"
-                        >
-                            Reset
-                        </Button>
-                    </div>
-
-                    <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase text-muted-foreground">
-                            Urutkan
-                        </p>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                            {sortOptions.map((option) => {
-                                const isSelected = option.value === sortBy
-
-                                return (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => onSortChange(option.value)}
-                                        className={`flex h-10 items-center justify-between rounded-lg border px-3 text-sm font-semibold transition hover:border-green-accent hover:bg-light-green-accent hover:text-green-accent focus:outline-none focus:ring-2 focus:ring-green-accent/20 ${
-                                            isSelected
-                                                ? "border-green-accent bg-light-green-accent text-green-accent"
-                                                : "border-border"
-                                        }`}
-                                    >
-                                        {option.label}
-                                        {isSelected && <Check size={15} />}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase text-muted-foreground">
-                            Range nominal plafon
-                        </p>
-                        <div className="rounded-xl border border-green-accent/15 bg-light-green-accent/30 px-3 py-4">
-                            <Slider
-                                min={limitBounds.min}
-                                max={limitBounds.max}
-                                step={sliderStep}
-                                value={sliderValue}
-                                onValueChange={(value) => {
-                                    const [minValue, maxValue] = value
-
-                                    onLimitMinChange(formatCurrency(minValue))
-                                    onLimitMaxChange(formatCurrency(maxValue))
-                                }}
-                            />
-                            <div className="mt-3 flex items-center justify-between gap-3 text-xs font-semibold text-green-accent">
-                                <span>{formatCurrency(limitBounds.min)}</span>
-                                <span>{formatCurrency(limitBounds.max)}</span>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <Input
-                                value={limitMin}
-                                onChange={(event) =>
-                                    onLimitMinChange(
-                                        formatCurrencyInput(event.target.value)
-                                    )
-                                }
-                                inputMode="numeric"
-                                placeholder="Min plafon"
-                                className="rounded-xl"
-                            />
-                            <Input
-                                value={limitMax}
-                                onChange={(event) =>
-                                    onLimitMaxChange(
-                                        formatCurrencyInput(event.target.value)
-                                    )
-                                }
-                                inputMode="numeric"
-                                placeholder="Max plafon"
-                                className="rounded-xl"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase text-muted-foreground">
-                            Tipe bisnis
-                        </p>
-                        {categoryOptions.length === 0 ? (
-                            <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                                Belum ada tipe bisnis.
-                            </p>
-                        ) : (
-                            <div className="flex flex-wrap gap-2">
-                                {categoryOptions.map((category) => {
-                                    const isSelected = selectedSet.has(category)
-
-                                    return (
-                                        <button
-                                            key={category}
-                                            type="button"
-                                            onClick={() => toggleCategory(category)}
-                                            className={`inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition hover:border-green-accent hover:bg-light-green-accent hover:text-green-accent focus:outline-none focus:ring-2 focus:ring-green-accent/20 ${
-                                                isSelected
-                                                    ? "border-green-accent bg-light-green-accent text-green-accent"
-                                                    : "border-border text-muted-foreground"
-                                            }`}
-                                        >
-                                            {isSelected && <Check size={14} />}
-                                            {category.toUpperCase()}
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
-function ArchiveActionMenu({
-    profile,
-    onReview,
-    onApprove,
-    onDecline,
-    onRevise,
-    onDelete,
-}: {
-    profile: RiskProfile
-    onReview: () => void
-    onApprove: () => void
-    onDecline: () => void
-    onRevise: () => void
-    onDelete: () => void
-}) {
-    const decisionState = getDecisionState(profile.status)
-    const hasDecision = decisionState !== "pending"
-
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Buka aksi untuk ${profile.name}`}
-                    className="text-muted-foreground hover:bg-light-green-accent hover:text-green-accent aria-expanded:bg-light-green-accent aria-expanded:text-green-accent"
-                >
-                    <MoreHorizontal size={18} />
-                </Button>
-            </PopoverTrigger>
-
-            <PopoverContent
-                align="end"
-                className="w-52 p-2"
-            >
-                <div className="grid gap-1">
-                    <MenuAction
-                        icon={<Eye size={16} />}
-                        label="Lihat detail"
-                        onClick={onReview}
-                    />
-
-                    <div className="my-1 border-t" />
-
-                    <p className="px-3 py-1 text-[11px] font-semibold uppercase text-muted-foreground">
-                        {hasDecision ? "Ubah keputusan" : "Keputusan"}
-                    </p>
-
-                    <MenuAction
-                        icon={<CheckCircle2 size={16} />}
-                        label="Terima"
-                        meta={decisionState === "approved" ? "Saat ini" : undefined}
-                        onClick={onApprove}
-                        disabled={decisionState === "approved"}
-                        className="text-green-accent hover:bg-light-green-accent hover:text-green-accent"
-                    />
-
-                    <MenuAction
-                        icon={<XCircle size={16} />}
-                        label="Tolak"
-                        meta={decisionState === "rejected" ? "Saat ini" : undefined}
-                        onClick={onDecline}
-                        disabled={decisionState === "rejected"}
-                        className="text-red-accent hover:bg-light-red-accent hover:text-red-accent"
-                    />
-
-                    <MenuAction
-                        icon={<ChevronRight size={16} />}
-                        label="Revisi"
-                        meta={decisionState === "revision" ? "Saat ini" : undefined}
-                        onClick={onRevise}
-                        disabled={decisionState === "revision"}
-                        className="text-yellowish-accent hover:bg-light-yellowish-accent hover:text-yellowish-accent"
-                    />
-
-                    <div className="my-1 border-t" />
-                    <MenuAction
-                        icon={<Trash2 size={16} />}
-                        label="Delete"
-                        onClick={onDelete}
-                        className="text-red-accent hover:bg-light-red-accent hover:text-red-accent"
-                    />
-                </div>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
-function MenuAction({
-    icon,
-    label,
-    meta,
-    onClick,
-    className = "",
-    disabled = false,
-}: {
-    icon: ReactNode
-    label: string
-    meta?: string
-    onClick: () => void
-    className?: string
-    disabled?: boolean
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            disabled={disabled}
-            className={`flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition hover:bg-muted focus:bg-muted focus:outline-none disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent ${className}`}
-        >
-            {icon}
-            <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                <span>{label}</span>
-                {meta && (
-                    <span className="text-[11px] font-medium text-muted-foreground">
-                        {meta}
-                    </span>
-                )}
-            </span>
-        </button>
-    )
-}
-
-function DashboardSkeleton() {
-    return (
-        <div className="mt-6 overflow-hidden rounded-2xl border bg-background">
-            <div className="hidden grid-cols-[76px_minmax(260px,1.7fr)_minmax(180px,.85fr)_minmax(190px,1fr)_44px] items-center gap-4 border-b bg-muted/25 px-5 py-3 lg:grid">
-                {[1, 2, 3, 4, 5].map((item) => (
-                    <Skeleton key={item} className="h-3 w-16" />
-                ))}
-            </div>
-
-            <div className="divide-y">
-                {[1, 2, 3, 4].map((item) => (
-                    <div
-                        key={item}
-                        className="grid gap-4 px-4 py-4 sm:px-5 md:grid-cols-[1fr_auto] md:items-start lg:grid-cols-[76px_minmax(260px,1.7fr)_minmax(180px,.85fr)_minmax(190px,1fr)_44px] lg:items-center"
-                    >
-                        <div className="space-y-2 md:col-span-2 lg:col-span-1">
-                            <Skeleton className="h-4 w-12" />
-                            <Skeleton className="h-3 w-10" />
-                        </div>
-                        <div className="space-y-2 md:col-start-1 lg:col-start-auto">
-                            <Skeleton className="h-5 w-44 max-w-full" />
-                            <Skeleton className="h-3 w-64 max-w-full" />
-                        </div>
-                        <div className="flex flex-wrap gap-2 md:col-start-1 lg:col-start-auto">
-                            <Skeleton className="h-7 w-28 rounded-full" />
-                            <Skeleton className="h-7 w-24 rounded-full" />
-                        </div>
-                        <div className="space-y-2 md:col-start-1 lg:col-start-auto">
-                            <Skeleton className="h-4 w-28" />
-                            <Skeleton className="h-3 w-24" />
-                        </div>
-                        <div className="flex gap-2 md:col-start-2 md:row-start-2 md:justify-end lg:col-start-auto lg:row-start-auto">
-                            <Skeleton className="h-8 w-8 rounded-md" />
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
     )
 }

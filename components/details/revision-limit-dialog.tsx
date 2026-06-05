@@ -2,13 +2,14 @@
 
 import { type FormEvent, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { CircleAlert, X } from "lucide-react"
+import { CircleAlert, Loader2, X } from "lucide-react"
 
 type RevisionLimitDialogProps = {
     open: boolean
     currentLimit: number
+    submitting?: boolean
     onClose: () => void
-    onSubmit: (limit: number) => void
+    onSubmit: (limit: number) => void | Promise<void>
 }
 
 const formatRupiah = (value: number) =>
@@ -17,6 +18,7 @@ const formatRupiah = (value: number) =>
 export default function RevisionLimitDialog({
     open,
     currentLimit,
+    submitting = false,
     onClose,
     onSubmit,
 }: RevisionLimitDialogProps) {
@@ -26,6 +28,7 @@ export default function RevisionLimitDialog({
                 <RevisionLimitDialogContent
                     key={currentLimit}
                     currentLimit={currentLimit}
+                    submitting={submitting}
                     onClose={onClose}
                     onSubmit={onSubmit}
                 />
@@ -36,6 +39,7 @@ export default function RevisionLimitDialog({
 
 function RevisionLimitDialogContent({
     currentLimit,
+    submitting = false,
     onClose,
     onSubmit,
 }: Omit<RevisionLimitDialogProps, "open">) {
@@ -56,6 +60,8 @@ function RevisionLimitDialogContent({
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
 
+        if (submitting) return
+
         if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
             setError("Nominal plafon tidak valid.")
             return
@@ -70,7 +76,7 @@ function RevisionLimitDialogContent({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={submitting ? undefined : onClose}
         >
             <motion.form
                 role="dialog"
@@ -100,8 +106,9 @@ function RevisionLimitDialogContent({
                     <button
                         type="button"
                         onClick={onClose}
+                        disabled={submitting}
                         aria-label="Tutup"
-                        className="flex h-9 w-9 items-center justify-center rounded-lg border transition hover:bg-muted"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg border transition hover:bg-muted disabled:cursor-wait disabled:opacity-60"
                     >
                         <X size={18} />
                     </button>
@@ -121,9 +128,10 @@ function RevisionLimitDialogContent({
                             onChange={(event) =>
                                 handleChange(event.target.value)
                             }
+                            disabled={submitting}
                             inputMode="numeric"
                             autoFocus
-                            className="w-full bg-transparent text-base font-semibold outline-none"
+                            className="w-full bg-transparent text-base font-semibold outline-none disabled:cursor-wait disabled:opacity-70"
                             placeholder="0"
                         />
                     </div>
@@ -140,16 +148,18 @@ function RevisionLimitDialogContent({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-xl border px-5 py-3 text-sm font-medium transition hover:bg-muted"
+                        disabled={submitting}
+                        className="rounded-xl border px-5 py-3 text-sm font-medium transition hover:bg-muted disabled:cursor-wait disabled:opacity-60"
                     >
                         Batal
                     </button>
                     <button
                         type="submit"
-                        className="rounded-xl bg-green-accent px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={!Number.isFinite(parsedValue) || parsedValue <= 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-accent px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={submitting || !Number.isFinite(parsedValue) || parsedValue <= 0}
                     >
-                        Ajukan Revisi
+                        {submitting && <Loader2 size={16} className="animate-spin" />}
+                        {submitting ? "Menyimpan revisi" : "Ajukan Revisi"}
                     </button>
                 </div>
             </motion.form>

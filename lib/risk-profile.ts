@@ -1,107 +1,32 @@
-export type RiskFormInput = {
-  name: string
-  merchant_id: string
-  business_category: string
-  business_age_months: number
-  qris_volume_monthly: number
-  qris_active_days: number
-  ecommerce_rating: number
-  pln_delay_days: number
-  pdam_bill_avg: number
-  pdam_late_payments: number
-}
+import type {
+  BackendPredictionResponse,
+  BreakdownItem,
+  ContributionItem,
+  DataSourceItem,
+  RawBackendPredictionResponse,
+  RiskFormInput,
+  RiskProfile,
+  ShapDriver,
+} from "./risk-profile-types"
 
-export type BackendPredictionResponse = {
-  score?: number
-  score_percentile?: number
-  risk_level?: string
-  recommended_limit?: number
-  peer_comparison_used?: boolean
-  probability?: number
-  class_probabilities?: Record<string, number>
-  confidence?: string
-  band?: string
-  band_range?: string
-  explanation?: string
-  ai_explanation?: string
-  shap_drivers?: Partial<ShapDriver>[]
-  contributions?: Partial<ContributionItem>[]
-  breakdown?: Partial<BreakdownItem>[]
-  data_sources?: Partial<DataSourceItem>[]
-  recommendations?: string[]
-}
-
-export type RawBackendPredictionResponse =
-  | BackendPredictionResponse
-  | {
-      status?: string
-      data?: {
-        merchant_id?: string
-        prediction?: BackendPredictionResponse
-      }
-    }
-
-export type BreakdownItem = {
-  id: number
-  title: string
-  points: string
-  weight: string
-  color: string
-  description: string
-}
-
-export type ContributionItem = {
-  id: number
-  label: string
-  value: number
-  impact: number
-  color: string
-}
-
-export type DataSourceItem = {
-  id: number
-  label: string
-  available: boolean
-}
-
-export type ShapDriver = {
-  id: number
-  feature: string
-  label: string
-  role: "supporting" | "balancing"
-  strength: number
-  value: string
-  description: string
-}
-
-export type RiskProfile = {
-  id: string
-  name: string
-  owner: string
-  category: string
-  score: number
-  risk: string
-  riskLabel: string
-  probability: number
-  scorePercentile: number
-  confidence: string
-  limit: number
-  recommended_limit: number
-  band: string
-  bandRange: string
-  status: string
-  createdAt: string
-  decisionNote?: string
-  revisionLimit?: number
-  peerComparisonUsed?: boolean
-  input: RiskFormInput
-  breakdown: BreakdownItem[]
-  contributions: ContributionItem[]
-  dataSources: DataSourceItem[]
-  recommendations: string[]
-  aiExplanation: string
-  shapDrivers: ShapDriver[]
-}
+export type {
+  BackendPredictionResponse,
+  BreakdownItem,
+  ContributionItem,
+  DataSourceItem,
+  RawBackendPredictionResponse,
+  RiskFormInput,
+  RiskProfile,
+  ShapDriver,
+} from "./risk-profile-types"
+export {
+  getDecisionDisplay,
+  getDecisionState,
+  getRiskColor,
+  getStatusStyle,
+  isDecisionFinal,
+  type DecisionState,
+} from "./risk-decision"
 
 const clamp = (value: number, min = 0, max = 100) =>
   Math.min(max, Math.max(min, value))
@@ -284,98 +209,6 @@ export function getBand(score: number) {
   if (score >= 55) return { band: "C", range: "55-69" }
   if (score >= 40) return { band: "D", range: "40-54" }
   return { band: "E", range: "0-39" }
-}
-
-export type DecisionState = "pending" | "approved" | "rejected" | "revision"
-
-export function getDecisionState(status?: string): DecisionState {
-  const normalized = status?.toLowerCase().trim() ?? ""
-
-  if (normalized.includes("approved") || normalized.includes("diterima")) {
-    return "approved"
-  }
-
-  if (normalized.includes("rejected") || normalized.includes("ditolak")) {
-    return "rejected"
-  }
-
-  if (
-    normalized.includes("revision") ||
-    normalized.includes("revisi") ||
-    normalized.includes("plafon")
-  ) {
-    return "revision"
-  }
-
-  return "pending"
-}
-
-export function isDecisionFinal(status?: string) {
-  return getDecisionState(status) !== "pending"
-}
-
-export function getDecisionDisplay(status?: string) {
-  const state = getDecisionState(status)
-  const displays = {
-    pending: {
-      title: "Menunggu keputusan analis",
-      description: "Pengajuan masih berada dalam tahap review.",
-      className: "bg-blue-card text-blue-card-txt",
-      borderClassName: "border-blue-card",
-    },
-    approved: {
-      title: "Pengajuan diterima",
-      description: "Rekomendasi approval telah dicatat untuk proses lanjutan.",
-      className: "bg-light-green-accent text-green-accent",
-      borderClassName: "border-green-accent/30",
-    },
-    rejected: {
-      title: "Pengajuan ditolak",
-      description: "Rekomendasi penolakan telah dicatat oleh analis.",
-      className: "bg-light-red-accent text-red-accent",
-      borderClassName: "border-red-200",
-    },
-    revision: {
-      title: "Revisi plafon sedang diajukan",
-      description: "Pengajuan menunggu tindak lanjut atas plafon yang direvisi.",
-      className: "bg-light-yellowish-accent text-yellowish-accent",
-      borderClassName: "border-yellow-200",
-    },
-  } satisfies Record<
-    DecisionState,
-    {
-      title: string
-      description: string
-      className: string
-      borderClassName: string
-    }
-  >
-
-  return displays[state]
-}
-
-export function getStatusStyle(status: string) {
-  const state = getDecisionState(status)
-
-  if (state === "approved") {
-    return "bg-light-green-accent text-green-accent"
-  }
-
-  if (state === "rejected") {
-    return "bg-light-red-accent text-red-accent"
-  }
-
-  if (state === "revision") {
-    return "bg-light-yellowish-accent text-yellowish-accent"
-  }
-
-  return "bg-blue-card text-blue-card-txt"
-}
-
-export function getRiskColor(riskLevel: string) {
-  if (riskLevel === "Low Risk") return "bg-green-accent"
-  if (riskLevel === "Medium Risk") return "bg-yellowish-accent"
-  return "bg-red-accent"
 }
 
 function calculateScore(input: RiskFormInput, response: BackendPredictionResponse) {

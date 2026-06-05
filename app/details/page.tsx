@@ -11,7 +11,13 @@ import SystemRecommendation from "@/components/details/system-recommendation"
 import ReportActions from "@/components/details/report-actions"
 import DecisionActions from "@/components/details/decision-actions"
 import RevisionLimitDialog from "@/components/details/revision-limit-dialog"
+import SimilarDebiturList from "@/components/details/similar-debitur-list"
 import { requestDecisionUpdate } from "@/lib/api"
+import {
+    findSimilarProfiles,
+    type PendingDecision,
+    type PendingReportAction,
+} from "@/lib/details"
 import { downloadRiskReportPdf } from "@/lib/report"
 import type { RiskProfile } from "@/lib/risk-profile"
 import {
@@ -25,6 +31,10 @@ export default function Details() {
     const [selectedDebitur, setSelectedDebitur] =
         useState<RiskProfile | null>(null)
     const [loading, setLoading] = useState(true)
+    const [pendingDecision, setPendingDecision] =
+        useState<PendingDecision>(null)
+    const [pendingReportAction, setPendingReportAction] =
+        useState<PendingReportAction>(null)
     const [similarDebitur, setSimilarDebitur] = useState<RiskProfile[]>([])
     const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
 
@@ -80,7 +90,9 @@ export default function Details() {
         status: "Approved" | "Rejected",
         note: string
     ) => {
-        if (!selectedDebitur) return
+        if (!selectedDebitur || pendingDecision) return
+
+        setPendingDecision(status === "Approved" ? "approve" : "reject")
 
         const updatedDebitur = {
             ...selectedDebitur,
@@ -89,21 +101,28 @@ export default function Details() {
         }
 
         persistSelected(updatedDebitur)
-        await syncDecision(updatedDebitur, status, note)
 
-        toast.success("Keputusan tersimpan", {
-            description: note,
-        })
+        try {
+            await syncDecision(updatedDebitur, status, note)
+
+            toast.success("Keputusan tersimpan", {
+                description: note,
+            })
+        } finally {
+            setPendingDecision(null)
+        }
     }
 
     const handleRevise = () => {
-        if (!selectedDebitur) return
+        if (!selectedDebitur || pendingDecision) return
 
         setRevisionDialogOpen(true)
     }
 
-    const handleRevisionSubmit = (revisionLimit: number) => {
-        if (!selectedDebitur) return
+    const handleRevisionSubmit = async (revisionLimit: number) => {
+        if (!selectedDebitur || pendingDecision) return
+
+        setPendingDecision("revision")
 
         const note = `Revisi plafon sedang diajukan ke Rp ${revisionLimit.toLocaleString("id-ID")}.`
         const updatedDebitur = {
@@ -116,31 +135,31 @@ export default function Details() {
         }
 
         persistSelected(updatedDebitur)
-        void syncDecision(
-            updatedDebitur,
-            "Revision Requested",
-            note,
-            revisionLimit
-        )
 
-        toast.success("Revisi plafon diajukan", {
-            description: `Plafon baru: Rp ${revisionLimit.toLocaleString("id-ID")}.`,
-        })
-        setRevisionDialogOpen(false)
+        try {
+            await syncDecision(
+                updatedDebitur,
+                "Revision Requested",
+                note,
+                revisionLimit
+            )
+
+            toast.success("Revisi plafon diajukan", {
+                description: `Plafon baru: Rp ${revisionLimit.toLocaleString("id-ID")}.`,
+            })
+            setRevisionDialogOpen(false)
+        } finally {
+            setPendingDecision(null)
+        }
     }
 
     const handleCompare = () => {
-        if (!selectedDebitur) return
+        if (!selectedDebitur || pendingReportAction) return
+
+        setPendingReportAction("compare")
 
         const hydratedList = readProfiles()
-        const similar = hydratedList
-            .filter(
-                (item) =>
-                    item.id !== selectedDebitur.id &&
-                    item.category.toLowerCase() ===
-                        selectedDebitur.category.toLowerCase()
-            )
-            .slice(0, 3)
+        const similar = findSimilarProfiles(hydratedList, selectedDebitur)
 
         setSimilarDebitur(similar)
 
@@ -154,6 +173,24 @@ export default function Details() {
                 description: `${similar.length} data pembanding ditampilkan.`,
             })
         }
+
+        window.setTimeout(() => setPendingReportAction(null), 250)
+    }
+
+    const handleDownloadReport = () => {
+        if (!selectedDebitur || pendingReportAction) return
+
+        setPendingReportAction("download")
+        window.setTimeout(() => {
+            try {
+                downloadRiskReportPdf(selectedDebitur)
+                toast.success("Laporan PDF dibuat", {
+                    description: `File risk-report-${selectedDebitur.id}.pdf sedang diunduh.`,
+                })
+            } finally {
+                setPendingReportAction(null)
+            }
+        }, 0)
     }
 
     if (!loading && !selectedDebitur) {
@@ -224,46 +261,17 @@ export default function Details() {
                 </section>
             )}
 
-            {similarDebitur.length > 0 && (
-                <section className="border-b p-4 lg:p-8 space-y-4">
-                    <h1 className="text-lg sm:text-xl font-bold">
-                        Debitur Serupa
-                    </h1>
-                    <div className="grid gap-3 md:grid-cols-3">
-                        {similarDebitur.map((item) => (
-                            <div
-                                key={item.id}
-                                className="rounded-xl border p-4"
-                            >
-                                <h2 className="font-semibold">
-                                    {item.name}
-                                </h2>
-                                <p className="text-sm text-muted-foreground">
-                                    Skor {item.score} - {item.riskLabel}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    Rp {item.limit.toLocaleString("id-ID")}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            )}
+            <SimilarDebiturList profiles={similarDebitur} />
 
             <ReportActions
-                onDownload={() => {
-                    if (!selectedDebitur) return
-
-                    downloadRiskReportPdf(selectedDebitur)
-                    toast.success("Laporan PDF dibuat", {
-                        description: `File risk-report-${selectedDebitur.id}.pdf sedang diunduh.`,
-                    })
-                }}
+                pendingAction={pendingReportAction}
+                onDownload={handleDownloadReport}
                 onCompare={handleCompare}
             />
 
             <DecisionActions
                 status={selectedDebitur?.status}
+                pendingAction={pendingDecision}
                 onReject={() =>
                     handleDecision(
                         "Rejected",
@@ -282,6 +290,7 @@ export default function Details() {
             <RevisionLimitDialog
                 open={revisionDialogOpen}
                 currentLimit={selectedDebitur?.limit ?? 0}
+                submitting={pendingDecision === "revision"}
                 onClose={() => setRevisionDialogOpen(false)}
                 onSubmit={handleRevisionSubmit}
             />
