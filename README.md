@@ -1,174 +1,116 @@
-# Risk Profiler
+# Risk Profiler Frontend
 
-Platform credit scoring berbasis AI untuk analisis pembiayaan UMKM.
+Risk Profiler Frontend adalah aplikasi web Next.js untuk membantu analis menilai risiko pembiayaan UMKM. Aplikasi ini menyediakan workflow mulai dari input data operasional merchant, pengiriman data ke backend machine learning, review hasil scoring, pengambilan keputusan analis, sampai pembuatan laporan PDF.
 
-## Deskripsi
+Frontend ini dikembangkan untuk kebutuhan PIDI DIGDAYA X HACKATHON 2026 sebagai antarmuka review risiko yang terhubung dengan Risk Profiler Backend.
 
-Risk Profiler adalah aplikasi web modern yang dirancang untuk membantu analis mengevaluasi kelayakan kredit UMKM menggunakan sistem penilaian risiko berbasis AI.
+## Fitur Utama
 
-Sistem ini menganalisis berbagai variabel bisnis seperti aktivitas QRIS, usia bisnis, rating e-commerce, dan perilaku pembayaran untuk menghasilkan:
+- Form input data UMKM dengan validasi React Hook Form dan Zod.
+- Integrasi ke backend melalui endpoint `POST /predict` untuk menghasilkan profil risiko.
+- Normalisasi response backend menjadi model data frontend yang konsisten.
+- Halaman detail untuk menampilkan skor, band, confidence, rekomendasi plafon, breakdown kontribusi, sumber data, rekomendasi sistem, dan faktor utama model.
+- Dashboard pengajuan dengan filter status, pencarian, pengurutan, filter kategori, dan filter range plafon.
+- Workflow keputusan analis untuk approval, rejection, dan revision requested.
+- Sinkronisasi keputusan ke endpoint backend `POST /decisions` dengan fallback penyimpanan lokal jika request gagal.
+- Penyimpanan data sementara menggunakan `localStorage`.
+- Export laporan risiko dalam format PDF langsung dari browser.
+- Layout responsif dengan sidebar, navbar, skeleton loading, toast notification, dan komponen UI reusable.
 
-* Skor risiko kredit
-* Kategori risiko
-* Rekomendasi plafon pembiayaan
-* Rekomendasi berbasis AI
-* Breakdown kontribusi variabel
-* Dashboard review debitur
+## Stack Teknologi
 
-Project ini menggabungkan frontend modern dengan backend machine learning menggunakan FastAPI.
+- Node.js 20 atau lebih baru
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- React Hook Form
+- Zod
+- Framer Motion
+- Lucide React
+- Radix UI
+- shadcn/ui style components
+- Sonner toast notification
+- Vercel atau Node runtime untuk deployment frontend
 
----
-
-# Fitur Utama
-
-## AI Credit Scoring
-
-Menghasilkan analisis risiko kredit secara otomatis menggunakan backend FastAPI dan model machine learning.
-
-## Input Data UMKM
-
-Form input data UMKM yang responsif dan tervalidasi.
-
-Data yang dianalisis:
-
-* Kategori bisnis
-* Usia bisnis
-* Volume transaksi QRIS
-* Hari aktif QRIS
-* Rating e-commerce
-* Keterlambatan pembayaran PLN
-
-## Dashboard Analisis Risiko
-
-Menampilkan hasil analisis seperti:
-
-* Risk score
-* Tingkat risiko
-* Rekomendasi plafon
-* Klasifikasi band
-* Confidence model
-
-## Breakdown Kontribusi
-
-Visualisasi kontribusi setiap variabel terhadap skor akhir.
-
-## Interface Responsif
-
-UI fully responsive yang dioptimalkan untuk:
-
-* Desktop
-* Tablet
-* Mobile
-
-## Penyimpanan Data Lokal
-
-Menggunakan localStorage browser sebagai simulasi database selama proses development.
-
----
-
-# Tech Stack
-
-## Frontend
-
-* Next.js
-* React
-* TypeScript
-* Tailwind CSS
-* shadcn/ui
-* Lucide React
-* React Hook Form
-* Zod
-
-## Backend
-
-* FastAPI
-* Python
-* Pandas
-* Joblib
-* Scikit-learn
-
-## Machine Learning
-
-Sistem AI menggunakan:
-
-* Encoder kategori
-* Feature scaling
-* Model klasifikasi terlatih
-
-Model machine learning dimuat menggunakan Joblib.
-
----
-
-# Struktur Project
+## Struktur Proyek
 
 ```txt
-app/
-├── dashboard/
-├── details/
-├── data_input/
-├── api/
-
-components/
-├── details/
-├── debitur/
-├── ui/
-├── navbar/
-
-lib/
-├── gauges.ts
-├── menus.ts
-
-api/
-├── models/
-├── schemas/
-├── services/
-├── main.py
+risk-profiler-web/
+|-- app/
+|   |-- page.tsx               # Landing page aplikasi
+|   |-- layout.tsx             # Root layout, AppShell, font, dan Toaster
+|   |-- globals.css            # Global style dan token tema
+|   |-- dashboard/
+|   |   |-- page.tsx           # Daftar dan filter pengajuan UMKM
+|   |-- data_input/
+|   |   |-- page.tsx           # Form input data UMKM
+|   |-- details/
+|   |   |-- page.tsx           # Detail profil risiko dan aksi keputusan
+|   |-- debitur/
+|       |-- page.tsx           # Redirect ke dashboard
+|-- components/
+|   |-- details/               # Komponen halaman detail risiko
+|   |-- layout/                # App shell, sidebar, navbar, dan navigasi
+|   |-- skeletons/             # Skeleton loading untuk halaman detail
+|   |-- ui/                    # Komponen UI dasar
+|-- lib/
+|   |-- api.ts                 # Client request ke backend
+|   |-- risk-profile.ts        # Normalisasi response dan bentuk RiskProfile
+|   |-- risk-storage.ts        # Helper localStorage untuk profil debitur
+|   |-- report.ts              # Generator PDF client-side
+|   |-- gauges.ts              # Utilitas visual gauge
+|   |-- menus.ts               # Konfigurasi menu navigasi
+|   |-- utils.ts               # Helper className
+|-- public/                    # Asset statis
+|-- package.json
+|-- next.config.ts
+|-- tsconfig.json
+|-- howtouse.md
+|-- README.md
 ```
 
----
+## Prasyarat
 
-# Highlight UI
+Pastikan Node.js dan npm tersedia sesuai konfigurasi project:
 
-## Dashboard Modern
+```txt
+Node.js >= 20.18.0
+npm >= 10.0.0
+```
 
-* Layout enterprise modern
-* Sidebar mobile interaktif
-* Risk indicator visual
-* Smooth animation
-* Mobile-friendly carousel
+Frontend membutuhkan URL backend melalui environment variable:
 
-## Sistem Risiko Visual
+```env
+NEXT_PUBLIC_RISK_API_URL=http://127.0.0.1:8000
+```
 
-Level risiko divisualisasikan menggunakan gauge berwarna:
+Jika environment variable tidak diisi, aplikasi menggunakan fallback:
 
-| Range Skor | Kategori      |
-| ---------- | ------------- |
-| 0–25       | Sangat Rendah |
-| 25–50      | Rendah        |
-| 50–75      | Baik          |
-| 75–100     | Sangat Baik   |
+```txt
+http://127.0.0.1:8000
+```
 
----
+Jika value env tidak diawali `http://` atau `https://`, aplikasi akan menormalisasi URL. Contoh `localhost:8000` menjadi `http://localhost:8000`, sedangkan domain publik tanpa protokol akan dianggap menggunakan `https://`.
 
-# Cara Kerja Sistem
+## Instalasi Lokal
 
-1. User menginput data UMKM
-2. Frontend melakukan validasi menggunakan Zod
-3. Data dikirim ke backend FastAPI
-4. Model machine learning melakukan prediksi
-5. Hasil dikembalikan ke frontend
-6. Dashboard menampilkan analisis dan rekomendasi
+Masuk ke folder frontend:
 
----
+```bash
+cd risk-profiler-web
+```
 
-# Instalasi Project
-
-## Frontend
-
-Install dependencies:
+Install dependency:
 
 ```bash
 npm install
+```
+
+Buat atau sesuaikan file `.env.local`:
+
+```env
+NEXT_PUBLIC_RISK_API_URL=http://127.0.0.1:8000
 ```
 
 Jalankan development server:
@@ -177,85 +119,232 @@ Jalankan development server:
 npm run dev
 ```
 
-Frontend berjalan di:
+Frontend akan berjalan di:
 
 ```txt
 http://localhost:3000
 ```
 
----
-
-## Backend
-
-Install dependencies:
-
-```bash
-pip install fastapi uvicorn pandas scikit-learn joblib
-```
-
-Jalankan server FastAPI:
-
-```bash
-uvicorn api.main:app --reload
-```
-
-Backend berjalan di:
+atau:
 
 ```txt
-http://127.0.0.1:8000
+http://127.0.0.1:3000
 ```
 
-Swagger documentation:
+## Script NPM
+
+| Script | Keterangan |
+| --- | --- |
+| `npm run dev` | Menjalankan Next.js development server |
+| `npm run build` | Membuat production build |
+| `npm run start` | Menjalankan production server setelah build |
+| `npm run lint` | Menjalankan ESLint |
+
+## Halaman Aplikasi
+
+### `/`
+
+Landing page sederhana untuk masuk ke workflow analisis risiko.
+
+### `/data_input`
+
+Halaman input data UMKM. Form ini mengumpulkan data berikut:
+
+| Field | Keterangan |
+| --- | --- |
+| `name` | Nama UMKM yang akan ditampilkan di profil risiko |
+| `business_category` | Kategori bisnis, seperti `fnb`, `retail`, `fashion`, `jasa`, atau kategori custom |
+| `business_age_months` | Dihitung otomatis dari tanggal mulai usaha |
+| `qris_volume_monthly` | Volume QRIS bulanan dalam rupiah |
+| `qris_active_days` | Jumlah hari aktif QRIS dalam satu bulan |
+| `ecommerce_rating` | Rating e-commerce dengan rentang 0-5 |
+| `pln_delay_days` | Jumlah hari keterlambatan pembayaran PLN |
+| `pdam_bill_avg` | Rata-rata tagihan PDAM |
+| `pdam_late_payments` | Jumlah keterlambatan pembayaran PDAM |
+
+Saat form berhasil disubmit, aplikasi membuat `merchant_id`, mengirim payload ke backend, menyimpan profil ke `localStorage`, lalu membuka halaman `/details`.
+
+### `/details`
+
+Halaman detail hasil analisis risiko. Halaman ini menampilkan:
 
 ```txt
-http://127.0.0.1:8000/docs
+Skor risiko
+Risk level
+Band dan band range
+Confidence
+Rekomendasi plafon
+Breakdown kontribusi
+Sumber data
+Rekomendasi sistem
+Faktor utama model
+Catatan keputusan
+Debitur serupa berdasarkan kategori
 ```
 
----
+Analis dapat melakukan:
 
-# Pengembangan Selanjutnya
+```txt
+Approve
+Reject
+Ajukan revisi plafon
+Download laporan PDF
+Bandingkan dengan debitur serupa
+```
 
-Fitur yang direncanakan:
+### `/dashboard`
 
-* Sistem autentikasi
-* Integrasi database asli
-* Workflow approval analis
-* Export laporan PDF
-* Real-time analytics
-* Multi-user support
-* Cloud deployment
-* Riwayat scoring debitur
-* Retraining model machine learning
+Halaman daftar pengajuan UMKM yang tersimpan di browser. Dashboard menyediakan:
 
----
+```txt
+Filter status
+Pencarian nama, ID, kategori, risk label, dan status
+Urutan submit terbaru atau terlama
+Urutan usia usaha tertua atau termuda
+Filter range plafon
+Filter kategori bisnis
+Aksi review, approve, reject, revisi, dan delete
+```
 
-# Tampilan Sistem
+### `/debitur`
 
-Halaman yang tersedia:
+Route kompatibilitas yang langsung melakukan redirect ke `/dashboard`.
 
-* Dashboard overview
-* Review debitur
-* Detail analisis risiko
-* Sistem rekomendasi AI
-* Sidebar mobile responsif
-* Form input data UMKM
+## Integrasi Backend
 
----
+Konfigurasi client API berada di `lib/api.ts`.
 
-# Catatan Development
+Endpoint yang digunakan:
 
-Project ini berfokus pada:
+```txt
+POST /predict
+POST /decisions
+```
 
-* Arsitektur komponen yang rapi
-* Responsive enterprise UI
-* Integrasi backend yang mudah dipahami
-* Implementasi machine learning sederhana
-* Simulasi workflow fintech nyata
+Timeout request frontend saat ini:
 
----
+```txt
+12000 ms
+```
 
-# Author
+### Request Prediksi
 
-Dibuat oleh Nabil Hilmi.
+Frontend mengirim payload ke:
 
-Berfokus pada frontend engineering, backend integration, dan sistem fintech berbasis AI.
+```txt
+{NEXT_PUBLIC_RISK_API_URL}/predict
+```
+
+Response backend dinormalisasi melalui `normalizeBackendPrediction` dan `createRiskProfile` agar tetap bisa dipakai oleh UI meskipun beberapa field opsional tidak tersedia.
+
+### Request Keputusan
+
+Frontend mengirim keputusan analis ke:
+
+```txt
+{NEXT_PUBLIC_RISK_API_URL}/decisions
+```
+
+Payload keputusan:
+
+```json
+{
+  "merchant_id": "UMKM-TEST",
+  "status": "Approved",
+  "note": "Pengajuan diterima berdasarkan hasil analisis risiko dan rekomendasi plafon.",
+  "revision_limit": null
+}
+```
+
+Status yang didukung:
+
+```txt
+Approved
+Rejected
+Revision Requested
+```
+
+Jika sinkronisasi keputusan ke backend gagal, data tetap disimpan secara lokal di browser dan aplikasi menampilkan warning toast.
+
+## Penyimpanan Data
+
+Frontend menggunakan `localStorage` sebagai penyimpanan sementara selama development dan demo.
+
+Key yang digunakan:
+
+```txt
+debitur_list
+selected_debitur
+prediction_result
+```
+
+Implikasi:
+
+```txt
+Data hanya tersedia di browser yang sama.
+Data bisa hilang jika localStorage dibersihkan.
+Data belum tersimpan permanen di database.
+Data keputusan tetap dicoba untuk disinkronkan ke backend.
+```
+
+## Build Production
+
+Jalankan lint:
+
+```bash
+npm run lint
+```
+
+Buat production build:
+
+```bash
+npm run build
+```
+
+Jalankan production server:
+
+```bash
+npm run start
+```
+
+Pastikan `NEXT_PUBLIC_RISK_API_URL` pada environment deployment mengarah ke backend yang aktif dan origin frontend sudah diizinkan oleh konfigurasi CORS backend.
+
+## Troubleshooting
+
+Jika submit form gagal, pastikan backend aktif dan endpoint health dapat diakses:
+
+```txt
+http://127.0.0.1:8000/health
+```
+
+Jika frontend masih memanggil URL backend lama, restart dev server setelah mengubah `.env.local`:
+
+```bash
+npm run dev
+```
+
+Jika terjadi CORS error, pastikan frontend berjalan pada origin yang diizinkan backend:
+
+```txt
+http://localhost:3000
+http://127.0.0.1:3000
+```
+
+Jika memakai domain atau port lain, tambahkan origin tersebut pada konfigurasi `CORSMiddleware` di backend.
+
+Jika dashboard kosong, buat profil baru dari halaman `/data_input`. Dashboard membaca data dari `localStorage` browser.
+
+Jika data lokal ingin direset, hapus `localStorage` untuk domain frontend melalui browser developer tools.
+
+Jika build gagal karena versi Node.js, gunakan Node.js 20.18.0 atau lebih baru.
+
+## Tim
+
+- Aditya Cakti Chandrasa: Project Manager
+- Nabil Muhammad Hilmi: Lead Engineer
+- Zahran Muhammad Syahbana Fardiaz: Machine Learning and Data Pipeline
+- Muhammad Ghazi Ali Asy'ary: Risk and Actuary
+
+## Lisensi
+
+Proyek ini dikembangkan untuk Digdaya x Hackathon 2026. Penggunaan, distribusi, dan hak kekayaan intelektual mengikuti ketentuan penyelenggara kompetisi dan kesepakatan tim.
