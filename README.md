@@ -347,4 +347,4 @@ Jika build gagal karena versi Node.js, gunakan Node.js 20.18.0 atau lebih baru.
 
 ## Lisensi
 
-Proyek ini dikembangkan untuk Digdaya x Hackathon 2026. Penggunaan, distribusi, dan hak kekayaan intelektual mengikuti ketentuan penyelenggara kompetisi dan kesepakatan tim.
+Proyek ini dikembangkan untuk Digdaya x Hackathon 2026. Penggunaan, distribusi, dan hak kekayaan intelektual mengikuti ketentuan penyelenggara kompetisi dan kesepakatan tim. 
